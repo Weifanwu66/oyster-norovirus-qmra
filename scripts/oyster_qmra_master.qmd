@@ -22,12 +22,10 @@ set.seed(1050)
 n_variability <- ndvar(10000)
 n_uncertainty <- ndunc(500)
 
-module1_results_dir <- here("results", "module_01_initial_contamination_gii")
 module2_results_dir <- here("results", "module_02_infectious_ratio")
 module3_results_dir <- here("results", "module_03_thermal_inactivation_oyster")
 module4_results_dir <- here("results", "module_04_serving_risk")
 figure_dir <- here("outputs", "figures")
-dir.create(module1_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(module2_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(module3_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(module4_results_dir, recursive = TRUE, showWarnings = FALSE)
@@ -428,86 +426,6 @@ ggsave(
 )
 ```
 
-## Posterior Uncertainty Inputs
-
-Each uncertainty row independently pairs one draw from the prevalence posterior
-with one draw from the positive-concentration posterior.
-
-```{r module1-uncertainty-inputs}
-set.seed(1052)
-prevalence_selected <- nishida_prevalence_posterior[
-  sample.int(
-    nrow(nishida_prevalence_posterior), n_uncertainty,
-    replace = n_uncertainty > nrow(nishida_prevalence_posterior)
-  ),
-]
-concentration_selected <- nishida_concentration_posterior[
-  sample.int(
-    nrow(nishida_concentration_posterior), n_uncertainty,
-    replace = n_uncertainty > nrow(nishida_concentration_posterior)
-  ),
-]
-
-module1_uncertainty_inputs <- data.frame(
-  uncertainty_iteration = seq_len(n_uncertainty),
-  prevalence_alpha = prevalence_selected$prevalence_alpha,
-  prevalence_beta = prevalence_selected$prevalence_beta,
-  concentration_gamma_shape = concentration_selected$concentration_gamma_shape,
-  concentration_gamma_scale = concentration_selected$positive_mean_gc /
-    concentration_selected$concentration_gamma_shape
-)
-
-# One U node contains the 500 uncertainty draws for one parameter.
-module1_uncertainty_u <- module1_uncertainty_inputs %>%
-  select(-uncertainty_iteration) %>%
-  map(~ mcdata(
-    .x,
-    type = "U"
-  ))
-
-module1_uncertainty_inputs %>% slice_head(n = 6)
-```
-
-## Module 1 Output
-
-### Fitted-Model Results
-
-```{r module1-save-model-results}
-write_csv(
-  nishida_prevalence_groups,
-  file.path(module1_results_dir, "nishida_prevalence_area_month_groups.csv")
-)
-write_csv(
-  nishida_prevalence_posterior,
-  file.path(module1_results_dir, "nishida_prevalence_posterior_draws.csv")
-)
-write_csv(
-  nishida_prevalence_posterior_summary,
-  file.path(module1_results_dir, "nishida_prevalence_posterior_summary.csv")
-)
-write_csv(
-  nishida_concentration_posterior,
-  file.path(module1_results_dir, "nishida_concentration_posterior_draws.csv")
-)
-write_csv(
-  nishida_concentration_parameter_summary,
-  file.path(module1_results_dir, "nishida_concentration_parameter_summary.csv")
-)
-write_csv(
-  nishida_concentration_model_comparison,
-  file.path(module1_results_dir, "nishida_concentration_model_comparison.csv")
-)
-```
-
-### Uncertainty Parameters for Downstream Modules
-
-```{r module1-save-uncertainty-inputs}
-write_csv(
-  module1_uncertainty_inputs,
-  file.path(module1_results_dir, "module_01_bayesian_uncertainty_inputs.csv")
-)
-```
-
 # Module 2: Infectious-Unit Ratio Conversion
 
 ## Purpose
@@ -633,6 +551,29 @@ $$P_\mathrm{inf}=1-\exp(-rD_\mathrm{serv})$$
 ```{r}
 source(here("scripts", "module4_serving_risk_functions.R"))
 
+# Posterior draws are selected only when the 2D simulation is constructed.
+set.seed(1052)
+prevalence_selected <- nishida_prevalence_posterior[
+  sample.int(nrow(nishida_prevalence_posterior), n_uncertainty),
+]
+concentration_selected <- nishida_concentration_posterior[
+  sample.int(nrow(nishida_concentration_posterior), n_uncertainty),
+]
+module1_uncertainty_u <- list(
+  prevalence_alpha = mcdata(prevalence_selected$prevalence_alpha, type = "U"),
+  prevalence_beta = mcdata(prevalence_selected$prevalence_beta, type = "U"),
+  concentration_gamma_shape = mcdata(
+    concentration_selected$concentration_gamma_shape,
+    type = "U"
+  ),
+  concentration_gamma_scale = mcdata(
+    concentration_selected$positive_mean_gc /
+      concentration_selected$concentration_gamma_shape,
+    type = "U"
+  )
+)
+module1_u_values <- map(module1_uncertainty_u, c)
+
 serving_sizes <- c(6L, 12L)
 serving_prevalence_matrix <- matrix(
   NA_real_,
@@ -659,7 +600,6 @@ serving_positive_count_vu <- setNames(
   }),
   serving_sizes
 )
-module1_u_values <- map(module1_uncertainty_u, as.numeric)
 
 set.seed(1055)
 for (u in seq_len(n_uncertainty)) {
@@ -710,7 +650,7 @@ serving_summary <- setNames(
       na.rm = TRUE
     )
     data.frame(
-      uncertainty_iteration = module1_uncertainty_inputs$uncertainty_iteration,
+      uncertainty_iteration = seq_len(n_uncertainty),
       mean_serving_gc = colMeans(gc_matrix, na.rm = TRUE),
       p05_serving_gc = gc_quantiles[1, ],
       p50_serving_gc = gc_quantiles[2, ],
@@ -739,7 +679,7 @@ serving_positive_count_vu <- lapply(
 )
 
 module4_serving_gc_vu <- list(
-  uncertainty_iteration = module1_uncertainty_inputs$uncertainty_iteration,
+  uncertainty_iteration = seq_len(n_uncertainty),
   prevalence_vu = serving_prevalence_vu,
   gc_vu = serving_gc_vu,
   positive_count_vu = serving_positive_count_vu,
@@ -1097,7 +1037,7 @@ make_condition_sensitivity_sample <- function(
     module4_serving_gc_vu$positive_count_vu[[serving_key]]
   )[, , 1]
   uncertainty_draws <- sample(
-    module1_uncertainty_inputs$uncertainty_iteration,
+    seq_len(n_uncertainty),
     n_sensitivity,
     replace = TRUE
   )
@@ -1123,19 +1063,18 @@ make_condition_sensitivity_sample <- function(
     serving_size = serving_size,
     uncertainty_iteration = uncertainty_draws,
     serving_initial_gii_gc = serving_matrix[linear_index],
-    serving_positive_oysters = positive_count_matrix[linear_index]
+    serving_positive_oysters = positive_count_matrix[linear_index],
+    prevalence_mean = module1_u_values$prevalence_alpha[uncertainty_column] /
+      (module1_u_values$prevalence_alpha[uncertainty_column] +
+         module1_u_values$prevalence_beta[uncertainty_column]),
+    prevalence_phi = module1_u_values$prevalence_alpha[uncertainty_column] +
+      module1_u_values$prevalence_beta[uncertainty_column],
+    positive_mean_gc =
+      module1_u_values$concentration_gamma_shape[uncertainty_column] *
+      module1_u_values$concentration_gamma_scale[uncertainty_column],
+    concentration_gamma_shape =
+      module1_u_values$concentration_gamma_shape[uncertainty_column]
   ) %>%
-    left_join(
-      module1_uncertainty_inputs %>%
-        transmute(
-          uncertainty_iteration,
-          prevalence_mean = prevalence_alpha / (prevalence_alpha + prevalence_beta),
-          prevalence_phi = prevalence_alpha + prevalence_beta,
-          positive_mean_gc = concentration_gamma_shape * concentration_gamma_scale,
-          concentration_gamma_shape
-        ),
-      by = "uncertainty_iteration"
-    ) %>%
     left_join(
       condition_survival_inputs %>%
         filter(
