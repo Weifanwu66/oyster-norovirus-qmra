@@ -17,6 +17,3 @@ The analysis is in
 
 The current Monte Carlo dimensions are 10,000 variability iterations and 500
 uncertainty iterations. These will be checked through convergence testing.
-
-Generated figures and model outputs are not tracked in the repository. The
-small Module 3 posterior file required by the master analysis is included.
