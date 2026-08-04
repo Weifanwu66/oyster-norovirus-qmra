@@ -182,7 +182,7 @@ summarize_mc2d_outcome <- function(condition_table, outcome_col) {
   n_uncertainty <- n_distinct(condition_table$uncertainty_iteration)
 
   risk_summary <- condition_table[[outcome_col]] %>%
-    mcdata(type = "VU", nsv = n_variability, nsu = n_uncertainty) %>%
+    mcdata(type = "VU") %>%
     summary(probs = c(0.05, 0.50, 0.95), lim = c(0.025, 0.975)) %>%
     .[[1]]
 

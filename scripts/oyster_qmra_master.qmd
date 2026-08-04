@@ -16,6 +16,7 @@ library(here)
 library(tidyverse)
 library(mc2d)
 library(brms)
+library(loo)
 
 set.seed(1050)
 # Default dimensions; final values will be selected by convergence testing.
@@ -445,6 +446,10 @@ gc_per_iu_u <- mcstoc(
   seed = 1060
 )
 iu_per_gc_u <- 1 / gc_per_iu_u
+
+tibble(gc_per_iu = c(gc_per_iu_u)) %>%
+  ggplot(aes(gc_per_iu)) +
+  geom_histogram()
 ```
 
 # Module 3: Dynamic Geeraerd Cooking Reduction
