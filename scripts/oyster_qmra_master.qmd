@@ -1,0 +1,1436 @@
+---
+title: "Oyster Norovirus GII QMRA"
+format:
+  html:
+    toc: true
+    code-fold: false
+execute:
+  warning: false
+  message: false
+---
+
+# Libraries and path
+
+```{r}
+library(here)
+library(tidyverse)
+library(mc2d)
+library(brms)
+
+set.seed(1050)
+# Default dimensions; final values will be selected by convergence testing.
+n_variability <- ndvar(10000)
+n_uncertainty <- ndunc(500)
+
+module1_results_dir <- here("results", "module_01_initial_contamination_gii")
+module2_results_dir <- here("results", "module_02_infectious_ratio")
+module3_results_dir <- here("results", "module_03_thermal_inactivation_oyster")
+module4_results_dir <- here("results", "module_04_serving_risk")
+figure_dir <- here("outputs", "figures")
+dir.create(module1_results_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(module2_results_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(module3_results_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(module4_results_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
+```
+
+This master QMD file connects the full QMRA pathway:
+
+1. **Initial contamination:** estimate oyster-level GII prevalence and positive concentration using a Bayesian hurdle model.
+2. **Genome-copy-to-infectious-unit conversion:** convert genome copies to infectious units using a ratio uniform distribution.
+3. **Thermal inactivation:** apply cooking time-temperature profiles to estimate the survival fraction.
+4. **Serving-level dose:** combine 6 or 12 oysters and calculate the total surviving infectious dose per serving.
+5. **Dose-response:** apply the selected dose-response model to estimate infection and illness risk per serving; the final model choice remains to be confirmed.
+6. **Oyster consumption:** use FoodNet consumption data to estimate annual raw- and cooked-oyster eating events in the United States.
+7. **Annual illness burden:** combine per-serving illness risk with annual consumption to estimate illnesses per year in the United States.
+
+
+# Module 1: Initial Contamination Distribution for Norovirus GII in Oysters
+
+## Purpose
+
+Module 1 estimates the distributions governing pre-cook norovirus GII genome
+copies per oyster. It uses a two-part hurdle model fitted to Nishida 2003 and
+2007:
+
+1. a hierarchical beta-binomial prevalence model. The papers report oyster
+   sample counts by harvest area and month/year. Each area-specific month/year
+   entry in Table 1 is treated here as one sampling group (for example, oysters
+   harvested from Area A in January 2002), so each study contributes multiple
+   groups and the two studies provide 42 groups in total. For each group, the
+   observed GII-positive count is modeled out of the total oysters tested, and
+   the underlying probability of positivity is drawn from a shared Beta
+   distribution; and
+2. a left-censored positive-concentration model selected by comparing pooled
+   Gamma and lognormal distributions for genome copies per oyster conditional
+   on GII positivity.
+
+The two models are fitted separately. Their posterior draws are then paired to
+create 500 uncertainty scenarios for the prevalence and positive-concentration
+parameters. Module 1 does not generate individual oysters. That variability is
+generated in Module 4: each simulated 6- or 12-oyster serving receives one
+prevalence draw shared by all oysters in that serving, after which positivity
+and, for positive oysters, concentration are sampled separately for each oyster.
+
+## Inputs
+
+```{r module1-inputs}
+# GII-positive concentration records from Tables 2 of the two papers.
+nishida_individual_gii_records <- read_csv(
+  here(
+    "data", "literature_norovirus_contamination",
+    "nishida_individual_gii_records.csv"
+  ),
+  show_col_types = FALSE
+)
+
+# Area-month sample sizes come from Table 1; GII-positive counts come from Table 2.
+nishida_prevalence_groups <- read_csv(
+  here(
+    "data", "literature_norovirus_contamination",
+    "nishida_area_month_gii_counts.csv"
+  ),
+  show_col_types = FALSE
+) %>%
+  mutate(
+    sampling_group_id = paste(study_id, area_code, month_year, sep = "__")
+  )
+
+nishida_prevalence_table <- nishida_prevalence_groups %>%
+  group_by(study_id) %>%
+  summarise(
+    sampling_group_n = n(),
+    total_sample_n = sum(sample_n),
+    observed_gii_positive_n = sum(gii_positive_n),
+    observed_gii_prevalence = observed_gii_positive_n / total_sample_n,
+    .groups = "drop"
+  )
+
+nishida_prevalence_table
+```
+
+## Prevalence Model
+
+The 42 study-area-month groups are partially pooled with
+
+$$
+p_g \sim \operatorname{Beta}(\alpha,\beta), \qquad
+k_g \sim \operatorname{Binomial}(n_g,p_g).
+$$
+
+`brms` fits the equivalent beta-binomial likelihood using the population mean
+$\mu_p$ and precision $\phi$. The reported Beta parameters are recovered as
+$\alpha=\mu_p\phi$ and $\beta=(1-\mu_p)\phi$.
+
+### Beta-Binomial Fit and Diagnostics
+
+```{r module1-prevalence-fit}
+# Shared beta-binomial prevalence model for the 42 area-month groups.
+prevalence_formula <- bf(
+  gii_positive_n | trials(sample_n) ~ 1,
+  phi ~ 1
+)
+prevalence_priors <- c(
+  set_prior("normal(0, 2)", class = "Intercept"),
+  set_prior("normal(0, 2)", class = "Intercept", dpar = "phi")
+)
+
+nishida_prevalence_fit <- brm(
+  formula = prevalence_formula,
+  data = nishida_prevalence_groups,
+  family = beta_binomial(link = "logit", link_phi = "log"),
+  prior = prevalence_priors,
+  backend = "cmdstanr",
+  chains = 4,
+  iter = 4000,
+  warmup = 2000,
+  cores = 4,
+  seed = 1041,
+  control = list(adapt_delta = 0.99, max_treedepth = 12),
+  silent = 2,
+  refresh = 0
+)
+
+nishida_prevalence_fit_summary <- summary(nishida_prevalence_fit)
+nishida_prevalence_fit_summary
+```
+
+### Visual Posterior Predictive Check
+
+```{r module1-prevalence-ppc}
+set.seed(1042)
+nishida_prevalence_pp_check <- pp_check(
+  nishida_prevalence_fit,
+  type = "intervals",
+  ndraws = 200,
+  prob = 0.80,
+  prob_outer = 0.95
+) +
+  labs(
+    x = "Sampling group",
+    y = "GII-positive oysters",
+    caption = "Dark points: observed; blue points and intervals: posterior predictions."
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none")
+
+nishida_prevalence_pp_check
+ggsave(
+  file.path(figure_dir, "module1_prevalence_ppc.png"),
+  nishida_prevalence_pp_check,
+  width = 8,
+  height = 4.5,
+  dpi = 300
+)
+```
+
+### Transformed Posterior Parameters
+
+```{r module1-prevalence-posterior}
+nishida_prevalence_draws <- posterior::as_draws_df(nishida_prevalence_fit)
+nishida_prevalence_posterior <- nishida_prevalence_draws %>%
+  transmute(
+    posterior_draw = .draw,
+    chain = .chain,
+    iteration = .iteration,
+    prevalence_mean = plogis(b_Intercept),
+    prevalence_phi = exp(b_phi_Intercept),
+    prevalence_alpha = prevalence_mean * prevalence_phi,
+    prevalence_beta = (1 - prevalence_mean) * prevalence_phi,
+    prevalence_between_group_sd = sqrt(
+      prevalence_mean * (1 - prevalence_mean) / (prevalence_phi + 1)
+    )
+  )
+
+nishida_prevalence_posterior_summary <- nishida_prevalence_posterior %>%
+  select(
+    prevalence_mean, prevalence_phi, prevalence_alpha, prevalence_beta,
+    prevalence_between_group_sd
+  ) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  group_by(parameter) %>%
+  summarise(
+    mean = mean(value),
+    sd = sd(value),
+    median = median(value),
+    lower_2.5 = quantile(value, 0.025),
+    upper_97.5 = quantile(value, 0.975),
+    .groups = "drop"
+  )
+
+nishida_prevalence_posterior_summary
+```
+## Positive-Concentration Model
+
+This model uses only oysters that were GII-positive by RT-PCR. RT-PCR
+results reported as `ND` are treated as positive concentrations left-censored
+below 100 genome copies/oyster.
+
+Pooled Gamma and log-normal models are compared by PSIS-LOO on the
+original copies/oyster scale. The pooled Gamma candidate is
+
+$$
+C\mid C>0 \sim \operatorname{Gamma}(\kappa,\kappa/m),
+$$
+
+### Candidate Fits and Model Comparison
+
+```{r module1-concentration-model-comparison}
+# Left-censored positive-concentration model.
+nishida_concentration_data <- nishida_individual_gii_records %>%
+  transmute(
+    study_id = factor(study_id, levels = c("Nishida_2003", "Nishida_2007")),
+    concentration_gc = if_else(
+      censoring == "exact",
+      concentration_copies_per_oyster,
+      upper_copies_per_oyster
+    ),
+    censor_code = if_else(censoring == "left_censored", -1L, 0L)
+  ) %>%
+  as.data.frame()
+
+concentration_formula <- bf(
+  concentration_gc | cens(censor_code) ~ 1
+)
+concentration_shape_priors <- c(
+  set_prior("normal(6, 4)", class = "Intercept"),
+  set_prior("lognormal(0, 1.5)", class = "shape")
+)
+concentration_lognormal_priors <- c(
+  set_prior("normal(6, 4)", class = "Intercept"),
+  set_prior("student_t(3, 0, 2)", class = "sigma")
+)
+
+nishida_concentration_gamma_fit <- brm(
+  formula = concentration_formula,
+  data = nishida_concentration_data,
+  family = Gamma(link = "log"),
+  prior = concentration_shape_priors,
+  backend = "cmdstanr",
+  chains = 4,
+  iter = 4000,
+  warmup = 2000,
+  cores = 4,
+  seed = 1061,
+  control = list(adapt_delta = 0.99, max_treedepth = 12),
+  silent = 2,
+  refresh = 0
+)
+
+nishida_concentration_lognormal_fit <- brm(
+  formula = concentration_formula,
+  data = nishida_concentration_data,
+  family = lognormal(),
+  prior = concentration_lognormal_priors,
+  backend = "cmdstanr",
+  chains = 4,
+  iter = 4000,
+  warmup = 2000,
+  cores = 4,
+  seed = 1063,
+  control = list(adapt_delta = 0.99, max_treedepth = 12),
+  silent = 2,
+  refresh = 0
+)
+
+nishida_concentration_loo <- list(
+  pooled_gamma = loo::loo(nishida_concentration_gamma_fit),
+  pooled_lognormal = loo::loo(nishida_concentration_lognormal_fit)
+)
+nishida_concentration_model_comparison <-
+  loo::loo_compare(nishida_concentration_loo) %>%
+  as.data.frame() %>%
+  as_tibble() %>%
+  select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
+
+nishida_concentration_fit <- nishida_concentration_gamma_fit
+nishida_concentration_model_comparison
+```
+
+### Gamma Posterior and Diagnostics
+
+```{r module1-concentration-posterior}
+nishida_concentration_posterior <-
+  posterior::as_draws_df(nishida_concentration_fit) %>%
+  transmute(
+    posterior_draw = .draw,
+    chain = .chain,
+    iteration = .iteration,
+    positive_mean_gc = exp(b_Intercept),
+    concentration_gamma_shape = shape,
+    concentration_gamma_cv = 1 / sqrt(shape)
+  )
+
+nishida_concentration_fit_summary <- summary(nishida_concentration_fit)
+nishida_concentration_parameter_summary <- nishida_concentration_posterior %>%
+  transmute(
+    positive_mean_gc,
+    concentration_gamma_shape,
+    concentration_gamma_cv,
+    positive_median_gc = qgamma(
+      0.5,
+      shape = concentration_gamma_shape,
+      scale = positive_mean_gc / concentration_gamma_shape
+    )
+  ) %>%
+  pivot_longer(everything(), names_to = "parameter", values_to = "value") %>%
+  group_by(parameter) %>%
+  summarise(
+    mean = mean(value),
+    sd = sd(value),
+    median = median(value),
+    lower_2.5 = quantile(value, 0.025),
+    upper_97.5 = quantile(value, 0.975),
+    .groups = "drop"
+  )
+
+nishida_concentration_fit_summary
+nishida_concentration_parameter_summary
+```
+
+### Visual Posterior Predictive Check
+
+```{r module1-concentration-ppc}
+# censoring percentage and the median of values over LOQ.
+set.seed(1056)
+nishida_concentration_yrep <- posterior_predict(
+  nishida_concentration_fit,
+  ndraws = 500
+)
+nishida_concentration_ppc_draws <- tibble(
+  draw = rep(seq_len(nrow(nishida_concentration_yrep)),
+             each = ncol(nishida_concentration_yrep)),
+  study_id = rep(nishida_individual_gii_records$study_id,
+                 times = nrow(nishida_concentration_yrep)),
+  concentration_gc = as.vector(t(nishida_concentration_yrep))
+) %>%
+  group_by(draw, study_id) %>%
+  summarise(
+    `Fraction <100` = mean(concentration_gc < 100),
+    `Median quantified GC/oyster` = median(concentration_gc[concentration_gc >= 100]),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(-c(draw, study_id), names_to = "metric", values_to = "value")
+
+nishida_concentration_ppc_intervals <- nishida_concentration_ppc_draws %>%
+  group_by(study_id, metric) %>%
+  summarise(
+    predicted = median(value, na.rm = TRUE),
+    lower = quantile(value, 0.025, na.rm = TRUE),
+    upper = quantile(value, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  )
+nishida_concentration_ppc_observed <- nishida_individual_gii_records %>%
+  group_by(study_id) %>%
+  summarise(
+    `Fraction <100` = mean(censoring == "left_censored"),
+    `Median quantified GC/oyster` = median(
+      concentration_copies_per_oyster[censoring == "exact"]
+    ),
+    .groups = "drop"
+  ) %>%
+  pivot_longer(-study_id, names_to = "metric", values_to = "value")
+
+nishida_concentration_pp_check <- ggplot(
+  nishida_concentration_ppc_intervals,
+  aes(study_id, predicted)
+) +
+  geom_pointrange(aes(ymin = lower, ymax = upper), color = "#4E79A7") +
+  geom_point(
+    data = nishida_concentration_ppc_observed,
+    aes(y = value),
+    color = "#D55E00",
+    shape = 4,
+    size = 3
+  ) +
+  facet_wrap(~metric, scales = "free_y") +
+  scale_x_discrete(labels = c(
+    Nishida_2003 = "Nishida 2003",
+    Nishida_2007 = "Nishida 2007"
+  )) +
+  labs(
+    x = NULL,
+    y = NULL,
+    caption = "Blue: posterior-predictive median and 95% interval; orange ×: observed."
+  ) +
+  theme_minimal(base_size = 12)
+
+nishida_concentration_pp_check
+ggsave(
+  file.path(figure_dir, "module1_positive_concentration_ppc.png"),
+  nishida_concentration_pp_check,
+  width = 8,
+  height = 4,
+  dpi = 300
+)
+```
+
+## Posterior Uncertainty Inputs
+
+Each uncertainty row independently pairs one draw from the prevalence posterior
+with one draw from the positive-concentration posterior.
+
+```{r module1-uncertainty-inputs}
+set.seed(1052)
+prevalence_selected <- nishida_prevalence_posterior[
+  sample.int(
+    nrow(nishida_prevalence_posterior), n_uncertainty,
+    replace = n_uncertainty > nrow(nishida_prevalence_posterior)
+  ),
+]
+concentration_selected <- nishida_concentration_posterior[
+  sample.int(
+    nrow(nishida_concentration_posterior), n_uncertainty,
+    replace = n_uncertainty > nrow(nishida_concentration_posterior)
+  ),
+]
+
+module1_uncertainty_inputs <- data.frame(
+  uncertainty_iteration = seq_len(n_uncertainty),
+  prevalence_alpha = prevalence_selected$prevalence_alpha,
+  prevalence_beta = prevalence_selected$prevalence_beta,
+  concentration_gamma_shape = concentration_selected$concentration_gamma_shape,
+  concentration_gamma_scale = concentration_selected$positive_mean_gc /
+    concentration_selected$concentration_gamma_shape
+)
+
+# One U node contains the 500 uncertainty draws for one parameter.
+module1_uncertainty_u <- module1_uncertainty_inputs %>%
+  select(-uncertainty_iteration) %>%
+  map(~ mcdata(
+    .x,
+    type = "U"
+  ))
+
+module1_uncertainty_inputs %>% slice_head(n = 6)
+```
+
+## Module 1 Output
+
+### Fitted-Model Results
+
+```{r module1-save-model-results}
+write_csv(
+  nishida_prevalence_groups,
+  file.path(module1_results_dir, "nishida_prevalence_area_month_groups.csv")
+)
+write_csv(
+  nishida_prevalence_posterior,
+  file.path(module1_results_dir, "nishida_prevalence_posterior_draws.csv")
+)
+write_csv(
+  nishida_prevalence_posterior_summary,
+  file.path(module1_results_dir, "nishida_prevalence_posterior_summary.csv")
+)
+write_csv(
+  nishida_concentration_posterior,
+  file.path(module1_results_dir, "nishida_concentration_posterior_draws.csv")
+)
+write_csv(
+  nishida_concentration_parameter_summary,
+  file.path(module1_results_dir, "nishida_concentration_parameter_summary.csv")
+)
+write_csv(
+  nishida_concentration_model_comparison,
+  file.path(module1_results_dir, "nishida_concentration_model_comparison.csv")
+)
+```
+
+### Uncertainty Parameters for Downstream Modules
+
+```{r module1-save-uncertainty-inputs}
+write_csv(
+  module1_uncertainty_inputs,
+  file.path(module1_results_dir, "module_01_bayesian_uncertainty_inputs.csv")
+)
+```
+
+# Module 2: Infectious-Unit Ratio Conversion
+
+## Purpose
+
+Module 2 adds a provisional genome-copy-to-infectious-unit conversion to each
+Module 1 uncertainty row. The literature range is expressed as genome copies
+per infectious unit (GC/IU), so the model samples on that scale and takes the
+reciprocal to obtain infectious units per genome copy (IU/GC).
+
+## Infectious Ratio
+
+```{r}
+gc_per_iu_lower <- 30
+gc_per_iu_upper <- 5000
+
+module2_uncertainty_u <- list(
+  genome_copies_per_infectious_unit = mcstoc(
+    runif,
+    type = "U",
+    min = gc_per_iu_lower,
+    max = gc_per_iu_upper,
+    seed = 1060
+  )
+)
+module2_uncertainty_u$infectious_units_per_genome_copy <-
+  1 / module2_uncertainty_u$genome_copies_per_infectious_unit
+
+module2_uncertainty_inputs <- tibble(
+  uncertainty_iteration = seq_len(n_uncertainty),
+  genome_copies_per_infectious_unit = as.numeric(
+    module2_uncertainty_u$genome_copies_per_infectious_unit
+  ),
+  infectious_units_per_genome_copy = as.numeric(
+    module2_uncertainty_u$infectious_units_per_genome_copy
+  )
+)
+
+module12_uncertainty_inputs <- module1_uncertainty_inputs %>%
+  left_join(module2_uncertainty_inputs, by = "uncertainty_iteration")
+module12_uncertainty_u <- c(module1_uncertainty_u, module2_uncertainty_u)
+
+ggplot(module2_uncertainty_inputs, aes(x = genome_copies_per_infectious_unit)) +
+  geom_histogram(bins = 30) +
+  coord_cartesian(xlim = c(30, 5000)) +
+  scale_x_continuous(breaks = seq(30, 5000, by = 400)) +
+  theme_minimal(base_size = 13) +
+  labs(x = "Genome copies per infectious unit")
+
+head(module2_uncertainty_inputs)
+head(module12_uncertainty_inputs)
+```
+
+## Save Module 2 File
+
+```{r}
+write_csv(module2_uncertainty_inputs, file.path(module2_results_dir, "module_02_uncertainty_inputs.csv"))
+write_csv(module12_uncertainty_inputs, file.path(module2_results_dir, "module_01_02_uncertainty_inputs.csv"))
+```
+
+# Module 3: Dynamic Geeraerd Cooking Reduction
+
+## Purpose
+
+Module 3 supplies posterior uncertainty in thermal survival for each cooking
+condition. Initial contamination is not applied here because oyster and serving
+variability are generated later in Module 4.
+
+## Dynamic Geeraerd Module Input
+
+```{r}
+source(here("scripts", "module3_thermal_functions.R"))
+
+geeraerd_post <- readRDS(
+  here("results", "module_03_thermal_inactivation_oyster",
+       "module3_geeraerd_posterior_draws.rds")
+)
+
+df_comeup_updated <- readRDS(
+  here("data", "module_03_thermal_inactivation_oyster", "df_comeup_updated.rds")
+)
+
+module3_target_time_grid <- bind_rows(
+  tibble(target_temperature_C = 63, time_min = seq(0, 12, by = 2)),
+  tibble(target_temperature_C = 74, time_min = seq(0, 12, by = 1)),
+  tibble(target_temperature_C = 90, time_min = seq(0, 3, by = 0.25)),
+  tibble(target_temperature_C = 100, time_min = seq(0, 3, by = 0.25))
+)
+
+module3_intermediate <- run_module3_thermal_inactivation(
+  geeraerd_post = geeraerd_post,
+  df_comeup = df_comeup_updated,
+  n_uncertainty = n_uncertainty,
+  target_time_grid = module3_target_time_grid
+)
+
+survival_fraction_table <- module3_intermediate$thermal_survival
+temperature_profiles <- module3_intermediate$thermal_profiles
+module3_time_grid <- module3_intermediate$time_grid
+theta_ge <- module3_intermediate$theta_ge
+module3_uncertainty_u <- theta_ge %>%
+  select(D_R, z, logN0, logNmin) %>%
+  map(~ mcdata(
+    .x,
+    type = "U"
+  ))
+
+write_csv(theta_ge, file.path(module3_results_dir, "module_03_thermal_uncertainty_inputs.csv"))
+write_csv(module3_time_grid, file.path(module3_results_dir, "module_03_target_time_grid.csv"))
+```
+
+# Module 4: Serving-Level Exposure and Risk
+
+## Purpose
+
+Module 4 first generates 10,000 servings within each uncertainty realization.
+All oysters in one serving share a single prevalence draw, but each oyster has
+its own Bernoulli positive status and, when positive, its own Gamma
+concentration. The resulting serving genome copies are combined with the Module
+2 conversion, Module 3 thermal survival, and the dose-response model. The
+serving outputs are `VU` nodes, with servings in the variability dimension and
+posterior parameter sets in the uncertainty dimension.
+
+$$P_\mathrm{inf}=1-\exp(-rD_\mathrm{serv})$$
+
+## Shared-Prevalence Serving Simulation
+
+```{r}
+source(here("scripts", "module4_serving_risk_functions.R"))
+
+serving_sizes <- c(6L, 12L)
+serving_prevalence_matrix <- matrix(
+  NA_real_,
+  nrow = n_variability,
+  ncol = n_uncertainty
+)
+serving_gc_vu <- setNames(
+  lapply(serving_sizes, function(serving_size) {
+    matrix(
+      0,
+      nrow = n_variability,
+      ncol = n_uncertainty
+    )
+  }),
+  serving_sizes
+)
+serving_positive_count_vu <- setNames(
+  lapply(serving_sizes, function(serving_size) {
+    matrix(
+      0L,
+      nrow = n_variability,
+      ncol = n_uncertainty
+    )
+  }),
+  serving_sizes
+)
+module1_u_values <- map(module1_uncertainty_u, as.numeric)
+
+set.seed(1055)
+for (u in seq_len(n_uncertainty)) {
+  # One prevalence is shared by every oyster in this simulated serving.
+  serving_prevalence <- rbeta(
+    n_variability,
+    shape1 = module1_u_values$prevalence_alpha[u],
+    shape2 = module1_u_values$prevalence_beta[u]
+  )
+  serving_prevalence_matrix[, u] <- serving_prevalence
+  running_gc <- numeric(n_variability)
+  running_positive_count <- integer(n_variability)
+
+  for (oyster_number in seq_len(max(serving_sizes))) {
+    positive <- rbinom(
+      n_variability,
+      size = 1,
+      prob = serving_prevalence
+    ) == 1
+    oyster_gc <- numeric(n_variability)
+    oyster_gc[positive] <- rgamma(
+      sum(positive),
+      shape = module1_u_values$concentration_gamma_shape[u],
+      scale = module1_u_values$concentration_gamma_scale[u]
+    )
+
+    running_gc <- running_gc + oyster_gc
+    running_positive_count <- running_positive_count + positive
+
+    if (oyster_number %in% serving_sizes) {
+      serving_key <- as.character(oyster_number)
+      serving_gc_vu[[serving_key]][, u] <- running_gc
+      serving_positive_count_vu[[serving_key]][, u] <- running_positive_count
+    }
+  }
+}
+
+serving_summary <- setNames(
+  lapply(names(serving_gc_vu), function(serving_key) {
+    gc_matrix <- serving_gc_vu[[serving_key]]
+    positive_count_matrix <- serving_positive_count_vu[[serving_key]]
+    gc_quantiles <- apply(
+      gc_matrix,
+      2,
+      quantile,
+      probs = c(0.05, 0.50, 0.95),
+      names = FALSE,
+      na.rm = TRUE
+    )
+    data.frame(
+      uncertainty_iteration = module1_uncertainty_inputs$uncertainty_iteration,
+      mean_serving_gc = colMeans(gc_matrix, na.rm = TRUE),
+      p05_serving_gc = gc_quantiles[1, ],
+      p50_serving_gc = gc_quantiles[2, ],
+      p95_serving_gc = gc_quantiles[3, ],
+      probability_positive_serving = colMeans(positive_count_matrix > 0),
+      mean_positive_oysters = colMeans(positive_count_matrix)
+    )
+  }),
+  names(serving_gc_vu)
+)
+
+# Convert the completed variability-by-uncertainty matrices to VU nodes.
+serving_prevalence_vu <- mcdata(
+  serving_prevalence_matrix,
+  type = "VU"
+)
+serving_gc_vu <- lapply(
+  serving_gc_vu,
+  mcdata,
+  type = "VU"
+)
+serving_positive_count_vu <- lapply(
+  serving_positive_count_vu,
+  mcdata,
+  type = "VU"
+)
+
+module4_serving_gc_vu <- list(
+  uncertainty_iteration = module1_uncertainty_inputs$uncertainty_iteration,
+  prevalence_vu = serving_prevalence_vu,
+  gc_vu = serving_gc_vu,
+  positive_count_vu = serving_positive_count_vu,
+  summary = serving_summary,
+  n_variability = n_variability,
+  n_uncertainty = n_uncertainty
+)
+
+iu_conversion_table <- module12_uncertainty_inputs %>%
+  select(
+    uncertainty_iteration,
+    genome_copies_per_infectious_unit,
+    infectious_units_per_genome_copy
+  )
+
+condition_grid <- survival_fraction_table %>%
+  distinct(target_temperature_C, time_min) %>%
+  arrange(target_temperature_C, time_min)
+
+dose_response_uncertainty_u <- list(
+  p_messner = mcstoc(
+    rbeta,
+    type = "U",
+    shape1 = messner_p_alpha,
+    shape2 = messner_p_beta,
+    seed = 1062
+  )
+)
+
+dose_response_uncertainty_inputs <- tibble(
+  uncertainty_iteration = seq_len(n_uncertainty),
+  p_messner = as.numeric(dose_response_uncertainty_u$p_messner)
+) %>%
+  mutate(
+    messner_p_mean = messner_p_mean,
+    messner_p_q025 = messner_p_q025,
+    messner_p_q975 = messner_p_q975,
+    messner_p_alpha = messner_p_alpha,
+    messner_p_beta = messner_p_beta,
+    p_host = p_host,
+    p_ill_given_inf = p_ill_given_inf,
+    mc2d_dimension = "U"
+  )
+
+write_csv(
+  dose_response_uncertainty_inputs,
+  file.path(module4_results_dir, "module_04_dose_response_uncertainty_inputs.csv")
+)
+
+condition_survival_inputs <- survival_fraction_table %>%
+  left_join(iu_conversion_table, by = "uncertainty_iteration")
+
+summarize_condition_risk_compact_vu <- function(
+    serving_gc_vu,
+    condition_survival_table,
+    dose_response_uncertainty,
+    serving_sizes = c(6, 12)
+) {
+  condition_inputs <- condition_survival_table %>%
+    left_join(
+      dose_response_uncertainty %>%
+        select(uncertainty_iteration, p_messner),
+      by = "uncertainty_iteration"
+    )
+
+  if (anyDuplicated(condition_inputs$uncertainty_iteration)) {
+    stop("Duplicate U rows in a Module 4 cooking condition.")
+  }
+
+  map_dfr(serving_sizes, function(serving_size) {
+    serving_key <- as.character(serving_size)
+    serving_node <- serving_gc_vu$gc_vu[[serving_key]]
+    serving_stats <- serving_gc_vu$summary[[serving_key]]
+    if (is.null(serving_node) || is.null(serving_stats)) {
+      stop("No precomputed serving matrix for serving size ", serving_size, ".")
+    }
+    serving_matrix <- unclass(serving_node)[, , 1]
+
+    uncertainty_id <- serving_gc_vu$uncertainty_iteration
+    condition_row <- match(
+      uncertainty_id,
+      condition_inputs$uncertainty_iteration
+    )
+    summary_row <- match(
+      uncertainty_id,
+      serving_stats$uncertainty_iteration
+    )
+    if (anyNA(condition_row) || anyNA(summary_row)) {
+      stop("Module 4 U rows do not align with the serving-matrix columns.")
+    }
+    this_condition <- condition_inputs[condition_row, , drop = FALSE]
+    this_serving_stats <- serving_stats[summary_row, , drop = FALSE]
+
+    iu_per_gc_u <- mcdata(
+      this_condition$infectious_units_per_genome_copy,
+      type = "U"
+    )
+    survival_fraction_u <- mcdata(
+      this_condition$survival_fraction,
+      type = "U"
+    )
+    p_messner_u <- mcdata(
+      this_condition$p_messner,
+      type = "U"
+    )
+    dose_scale_u <- iu_per_gc_u * survival_fraction_u
+    p_infection_vu <- p_host * p_messner_u *
+      (-expm1(-(serving_node * dose_scale_u)))
+
+    dose_scale <- as.numeric(dose_scale_u)
+    mean_p_infection <- colMeans(
+      unclass(p_infection_vu)[, , 1],
+      na.rm = TRUE
+    )
+
+    mean_dose <- this_serving_stats$mean_serving_gc * dose_scale
+    p05_dose <- this_serving_stats$p05_serving_gc * dose_scale
+    p50_dose <- this_serving_stats$p50_serving_gc * dose_scale
+    p95_dose <- this_serving_stats$p95_serving_gc * dose_scale
+    p05_p_infection <- p_host * as.numeric(p_messner_u) *
+      (-expm1(-p05_dose))
+    p50_p_infection <- p_host * as.numeric(p_messner_u) *
+      (-expm1(-p50_dose))
+    p95_p_infection <- p_host * as.numeric(p_messner_u) *
+      (-expm1(-p95_dose))
+
+    tibble(
+      target_temperature_C = this_condition$target_temperature_C,
+      time_min = this_condition$time_min,
+      serving_size = serving_size,
+      uncertainty_iteration = this_condition$uncertainty_iteration,
+      mean_dose_IU_per_serving = mean_dose,
+      mean_p_infection = mean_p_infection,
+      mean_p_illness = p_ill_given_inf * mean_p_infection,
+      p05_dose_IU_per_serving = p05_dose,
+      p50_dose_IU_per_serving = p50_dose,
+      p95_dose_IU_per_serving = p95_dose,
+      p05_p_infection = p05_p_infection,
+      p50_p_infection = p50_p_infection,
+      p95_p_infection = p95_p_infection,
+      p05_p_illness = p_ill_given_inf * p05_p_infection,
+      p50_p_illness = p_ill_given_inf * p50_p_infection,
+      p95_p_illness = p_ill_given_inf * p95_p_infection,
+      n_variability = nrow(serving_matrix)
+    )
+  })
+}
+
+module4_by_uncertainty <- pmap_dfr(
+  condition_grid,
+  function(target_temperature_C, time_min) {
+    condition_survival_table <- condition_survival_inputs %>%
+      filter(
+        .data$target_temperature_C == .env$target_temperature_C,
+        .data$time_min == .env$time_min
+      )
+
+    summarize_condition_risk_compact_vu(
+      serving_gc_vu = module4_serving_gc_vu,
+      condition_survival_table = condition_survival_table,
+      dose_response_uncertainty = dose_response_uncertainty_inputs,
+      serving_sizes = c(6, 12)
+    )
+  }
+)
+
+# Expected risk: variability is averaged within each parameter realization,
+# then uncertainty is summarized across those conditional means.
+module4_output_summary <- module4_by_uncertainty %>%
+  group_by(target_temperature_C, time_min, serving_size) %>%
+  summarise(
+    n_uncertainty = n_distinct(uncertainty_iteration),
+    n_variability = median(n_variability, na.rm = TRUE),
+
+    median_dose_IU_per_serving = median(mean_dose_IU_per_serving, na.rm = TRUE),
+    p025_dose_IU_per_serving = quantile(mean_dose_IU_per_serving, 0.025, na.rm = TRUE),
+    p975_dose_IU_per_serving = quantile(mean_dose_IU_per_serving, 0.975, na.rm = TRUE),
+
+    median_p_infection = median(mean_p_infection, na.rm = TRUE),
+    p025_p_infection = quantile(mean_p_infection, 0.025, na.rm = TRUE),
+    p975_p_infection = quantile(mean_p_infection, 0.975, na.rm = TRUE),
+
+    median_p_illness = median(mean_p_illness, na.rm = TRUE),
+    p025_p_illness = quantile(mean_p_illness, 0.025, na.rm = TRUE),
+    p975_p_illness = quantile(mean_p_illness, 0.975, na.rm = TRUE),
+
+    .groups = "drop"
+  ) %>%
+  arrange(target_temperature_C, time_min, serving_size)
+
+saveRDS(module4_output_summary, file.path(module4_results_dir, "module4_serving_risk_summary.rds"))
+write_csv(module4_output_summary, file.path(module4_results_dir, "module4_serving_risk_summary.csv"))
+
+format_risk_label <- function(x) {
+  out <- ifelse(
+    x >= 0.001,
+    formatC(x, format = "f", digits = 3),
+    formatC(x, format = "e", digits = 0)
+  )
+  out <- sub("e-0", "e-", out)
+  sub("e\\+0", "e+", out)
+}
+
+format_risk_interval <- function(median_value, lower_value, upper_value) {
+  paste0(
+    format_risk_label(median_value),
+    " [",
+    format_risk_label(lower_value),
+    ", ",
+    format_risk_label(upper_value),
+    "]"
+  )
+}
+
+format_time_min_label <- function(x) {
+  sub("\\.?0+$", "", formatC(x, format = "f", digits = 2))
+}
+
+module4_heatmap_data <- module4_output_summary %>%
+  mutate(
+    time_label = format_time_min_label(time_min),
+    target_temperature_label = paste0(target_temperature_C, " °C"),
+    serving_size_label = paste0(serving_size, " oysters"),
+    below_one_in_thousand = median_p_illness < 1e-3,
+    # The lower display bound is needed only for the log10 color scale. The
+    # unmodified risk estimates and uncertainty intervals remain in the tables.
+    median_p_illness_plot = pmax(median_p_illness, 1e-6)
+  )
+
+module4_illness_heatmap_uncertainty <- ggplot(
+  module4_heatmap_data,
+  aes(
+    x = factor(time_label, levels = unique(time_label[order(time_min)])),
+    y = 1,
+    fill = median_p_illness_plot
+  )
+) +
+  geom_tile(color = "white", linewidth = 0.4) +
+  geom_point(
+    data = dplyr::filter(module4_heatmap_data, below_one_in_thousand),
+    aes(
+      x = factor(time_label, levels = unique(time_label[order(time_min)])),
+      y = 1
+    ),
+    inherit.aes = FALSE,
+    shape = 21,
+    color = "grey20",
+    fill = NA,
+    stroke = 0.55,
+    size = 2.2
+  ) +
+  facet_grid(
+    serving_size_label ~ target_temperature_label,
+    scales = "free_x",
+    space = "free_x"
+  ) +
+  scale_fill_gradientn(
+    colors = c("#F7FBFF", "#D6EAF8", "#9ECAE1", "#FDD49E", "#FC8D59", "#B30000"),
+    trans = "log10",
+    limits = c(1e-6, 1e-1),
+    breaks = 10^(-6:-1),
+    labels = paste0("1e-", 6:1),
+    name = "Median\nP(illness)",
+    guide = guide_colorbar(
+      barwidth = grid::unit(12, "cm"),
+      barheight = grid::unit(0.5, "cm"),
+      title.position = "left",
+      label.position = "bottom"
+    )
+  ) +
+  scale_x_discrete(guide = guide_axis(angle = 45, check.overlap = TRUE)) +
+  scale_y_continuous(breaks = NULL) +
+  labs(
+    x = "Holding time (min)",
+    y = NULL,
+    caption = paste0(
+      "Color shows median P(illness). Open circles mark conditions with ",
+      "median P(illness) < 1e-3; 95% CrI values are retained in the summary outputs."
+    )
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.grid = element_blank(),
+    panel.spacing = grid::unit(0.3, "in"),
+    panel.border = element_rect(color = "grey55", fill = NA),
+    strip.background = element_rect(fill = "grey92", color = "grey55"),
+    axis.text.x = element_text(hjust = 1, vjust = 1, size = 9),
+    strip.text = element_text(face = "bold", size = 12),
+    legend.position = "bottom",
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 10),
+    plot.caption = element_text(hjust = 0, size = 10)
+  )
+
+ggsave(
+  file.path(module4_results_dir, "module4_illness_heatmap_uncertainty.png"),
+  module4_illness_heatmap_uncertainty,
+  width = 12,
+  height = 6,
+  dpi = 300
+)
+
+saveRDS(module4_by_uncertainty, file.path(module4_results_dir, "module4_serving_risk_by_uncertainty.rds"))
+write_csv(module4_by_uncertainty, file.path(module4_results_dir, "module4_serving_risk_by_uncertainty.csv"))
+
+module4_2d_summary <- module4_by_uncertainty %>%
+  pivot_longer(
+    cols = matches("^(mean|p05|p50|p95)_"),
+    names_to = "risk_statistic",
+    values_to = "value"
+  ) %>%
+  mutate(
+    variability_statistic = str_extract(risk_statistic, "^(mean|p05|p50|p95)"),
+    outcome = str_remove(risk_statistic, "^(mean|p05|p50|p95)_")
+  ) %>%
+  group_by(target_temperature_C, time_min, serving_size, outcome, variability_statistic) %>%
+  summarise(
+    n_uncertainty = n_distinct(uncertainty_iteration),
+    n_variability = median(n_variability, na.rm = TRUE),
+    uncertainty_median = median(value, na.rm = TRUE),
+    uncertainty_p025 = quantile(value, 0.025, na.rm = TRUE),
+    uncertainty_p975 = quantile(value, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(target_temperature_C, time_min, serving_size, outcome, variability_statistic)
+
+saveRDS(module4_2d_summary, file.path(module4_results_dir, "module4_serving_risk_2d_summary.rds"))
+write_csv(module4_2d_summary, file.path(module4_results_dir, "module4_serving_risk_2d_summary.csv"))
+```
+
+## Module 4 Sensitivity Analysis
+
+```{r}
+sensitivity_n_per_condition <- 2000
+
+sensitivity_inputs <- c(
+  "serving_initial_gii_gc",
+  "serving_positive_oysters",
+  "prevalence_mean",
+  "prevalence_phi",
+  "positive_mean_gc",
+  "concentration_gamma_shape",
+  "infectious_units_per_genome_copy",
+  "survival_fraction",
+  "log_reduction",
+  "p_messner",
+  "D_R",
+  "z",
+  "logN0",
+  "logNmin"
+)
+
+make_condition_sensitivity_sample <- function(
+    target_temperature_C,
+    time_min,
+    serving_size,
+    n_sensitivity = sensitivity_n_per_condition
+) {
+  serving_key <- as.character(serving_size)
+  serving_matrix <- unclass(
+    module4_serving_gc_vu$gc_vu[[serving_key]]
+  )[, , 1]
+  positive_count_matrix <- unclass(
+    module4_serving_gc_vu$positive_count_vu[[serving_key]]
+  )[, , 1]
+  uncertainty_draws <- sample(
+    module1_uncertainty_inputs$uncertainty_iteration,
+    n_sensitivity,
+    replace = TRUE
+  )
+  uncertainty_column <- match(
+    uncertainty_draws,
+    module4_serving_gc_vu$uncertainty_iteration
+  )
+  if (anyNA(uncertainty_column)) {
+    stop("Sensitivity U draws do not align with serving-matrix columns.")
+  }
+
+  variability_row <- sample.int(
+    nrow(serving_matrix),
+    n_sensitivity,
+    replace = TRUE
+  )
+  linear_index <- variability_row +
+    (uncertainty_column - 1L) * nrow(serving_matrix)
+
+  tibble(
+    target_temperature_C = target_temperature_C,
+    time_min = time_min,
+    serving_size = serving_size,
+    uncertainty_iteration = uncertainty_draws,
+    serving_initial_gii_gc = serving_matrix[linear_index],
+    serving_positive_oysters = positive_count_matrix[linear_index]
+  ) %>%
+    left_join(
+      module1_uncertainty_inputs %>%
+        transmute(
+          uncertainty_iteration,
+          prevalence_mean = prevalence_alpha / (prevalence_alpha + prevalence_beta),
+          prevalence_phi = prevalence_alpha + prevalence_beta,
+          positive_mean_gc = concentration_gamma_shape * concentration_gamma_scale,
+          concentration_gamma_shape
+        ),
+      by = "uncertainty_iteration"
+    ) %>%
+    left_join(
+      condition_survival_inputs %>%
+        filter(
+          .data$target_temperature_C == .env$target_temperature_C,
+          .data$time_min == .env$time_min
+        ) %>%
+        select(
+          uncertainty_iteration,
+          infectious_units_per_genome_copy,
+          genome_copies_per_infectious_unit,
+          survival_fraction,
+          log_reduction
+        ),
+      by = "uncertainty_iteration"
+    ) %>%
+    left_join(
+      dose_response_uncertainty_inputs %>%
+        select(uncertainty_iteration, p_messner),
+      by = "uncertainty_iteration"
+    ) %>%
+    left_join(
+      theta_ge %>%
+        select(uncertainty_iteration, D_R, z, logN0, logNmin),
+      by = "uncertainty_iteration"
+    ) %>%
+    mutate(
+      pre_cook_IU_per_serving = serving_initial_gii_gc * infectious_units_per_genome_copy,
+      dose_IU_per_serving = pre_cook_IU_per_serving * survival_fraction,
+      p_exposure = -expm1(-dose_IU_per_serving),
+      p_infection = p_host * p_messner * p_exposure,
+      p_illness = p_ill_given_inf * p_infection
+    )
+}
+
+calculate_spearman_sensitivity <- function(data, input_names, outcome_name = "p_illness") {
+  map_dfr(input_names, function(input_name) {
+    rho <- suppressWarnings(
+      cor(
+        data[[input_name]],
+        data[[outcome_name]],
+        method = "spearman",
+        use = "pairwise.complete.obs"
+      )
+    )
+
+    tibble(
+      input = input_name,
+      outcome = outcome_name,
+      spearman_rho = rho,
+      abs_spearman_rho = abs(rho),
+      n = sum(complete.cases(data[, c(input_name, outcome_name)]))
+    )
+  }) %>%
+    arrange(desc(abs_spearman_rho))
+}
+
+set.seed(1064)
+module4_sensitivity_sample <- crossing(
+  condition_grid,
+  serving_size = c(6, 12)
+) %>%
+  pmap_dfr(make_condition_sensitivity_sample)
+
+module4_sensitivity_overall <- calculate_spearman_sensitivity(
+  module4_sensitivity_sample,
+  sensitivity_inputs,
+  outcome_name = "p_illness"
+) %>%
+  mutate(scope = "all_conditions")
+
+module4_sensitivity_by_condition <- module4_sensitivity_sample %>%
+  group_by(target_temperature_C, time_min, serving_size) %>%
+  group_modify(~ calculate_spearman_sensitivity(.x, sensitivity_inputs, outcome_name = "p_illness")) %>%
+  ungroup()
+
+input_labels <- c(
+  serving_initial_gii_gc = "Initial GII genome copies per serving",
+  serving_positive_oysters = "GII-positive oysters per serving",
+  prevalence_mean = "Mean area-month GII prevalence",
+  prevalence_phi = "Area-month prevalence precision",
+  positive_mean_gc = "Mean positive-oyster concentration",
+  concentration_gamma_shape = "Positive-concentration Gamma shape",
+  infectious_units_per_genome_copy = "Infectious units per genome copy",
+  survival_fraction = "Thermal survival fraction",
+  log_reduction = "Thermal log reduction",
+  p_messner = "Dose-response P",
+  D_R = "Geeraerd D_R",
+  z = "Geeraerd z",
+  logN0 = "Geeraerd logN0",
+  logNmin = "Geeraerd logNmin"
+)
+
+module4_sensitivity_plot_data <- module4_sensitivity_overall %>%
+  mutate(
+    input_label = recode(input, !!!input_labels),
+    direction = if_else(spearman_rho >= 0, "Positive", "Negative"),
+    input_label = fct_reorder(input_label, abs_spearman_rho)
+  )
+
+module4_sensitivity_tornado_plot <- ggplot(
+  module4_sensitivity_plot_data,
+  aes(x = spearman_rho, y = input_label, fill = direction)
+) +
+  geom_col(width = 0.72) +
+  geom_vline(xintercept = 0, linewidth = 0.4, color = "grey35") +
+  scale_fill_manual(values = c(Positive = "#2F6F9F", Negative = "#B65C45")) +
+  scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.25)) +
+  labs(
+    x = "Spearman rank correlation with illness risk",
+    y = NULL,
+    fill = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    legend.position = "bottom"
+  )
+
+saveRDS(module4_sensitivity_sample, file.path(module4_results_dir, "module4_sensitivity_sample.rds"))
+write_csv(module4_sensitivity_overall, file.path(module4_results_dir, "module4_sensitivity_spearman_overall.csv"))
+write_csv(module4_sensitivity_by_condition, file.path(module4_results_dir, "module4_sensitivity_spearman_by_condition.csv"))
+ggsave(
+  file.path(module4_results_dir, "module4_sensitivity_tornado_p_illness.png"),
+  module4_sensitivity_tornado_plot,
+  width = 8,
+  height = 5.2,
+  dpi = 300
+)
+ggsave(
+  file.path(module4_results_dir, "module4_sensitivity_tornado_p_illness.pdf"),
+  module4_sensitivity_tornado_plot,
+  width = 8,
+  height = 5.2
+)
+
+module4_sensitivity_tornado_plot
+```
+
+## U.S. Annual Illness Burden from FoodNet Oyster Consumption
+
+```{r}
+foodnet_oyster_consumption_inputs <- tibble(
+  food_category = c("raw_oysters", "cooked_oysters"),
+  weekly_consumption_probability = c(0.007, 0.026 - 0.007),
+  source = c(
+    "FoodNet Exposure Atlas 2006-2007, page 19: if yes, were the oysters raw, total 0.7%",
+    "FoodNet Exposure Atlas 2006-2007, page 19: oysters total 2.6% minus raw oysters 0.7%"
+  )
+) %>%
+  mutate(
+    annual_events_per_person = weekly_consumption_probability * 52
+  )
+
+us_population_input <- tibble(
+  population = 341800000,
+  population_source = "U.S. Census Bureau Vintage 2025 estimate, July 1, 2025"
+)
+
+write_csv(
+  foodnet_oyster_consumption_inputs,
+  file.path(module4_results_dir, "module4_foodnet_oyster_consumption_inputs.csv")
+)
+write_csv(
+  us_population_input,
+  file.path(module4_results_dir, "module4_us_population_input.csv")
+)
+
+raw_oyster_survival_inputs <- iu_conversion_table %>%
+  mutate(
+    target_temperature_C = NA_real_,
+    time_min = NA_real_,
+    survival_fraction = 1,
+    log_reduction = 0
+  )
+
+module4_raw_by_uncertainty <- summarize_condition_risk_compact_vu(
+  serving_gc_vu = module4_serving_gc_vu,
+  condition_survival_table = raw_oyster_survival_inputs,
+  dose_response_uncertainty = dose_response_uncertainty_inputs,
+  serving_sizes = c(6, 12)
+) %>%
+  mutate(food_category = "raw_oysters")
+
+module4_cooked_by_uncertainty <- module4_by_uncertainty %>%
+  mutate(food_category = "cooked_oysters")
+
+module4_burden_by_uncertainty <- bind_rows(
+  module4_raw_by_uncertainty,
+  module4_cooked_by_uncertainty
+) %>%
+  left_join(foodnet_oyster_consumption_inputs, by = "food_category") %>%
+  mutate(
+    us_population = us_population_input$population[1],
+    annual_consumption_events_us = annual_events_per_person * us_population,
+    annual_illnesses_us = mean_p_illness * annual_consumption_events_us
+  )
+
+module4_us_annual_illness_summary <- module4_burden_by_uncertainty %>%
+  group_by(food_category, target_temperature_C, time_min, serving_size) %>%
+  summarise(
+    weekly_consumption_probability = first(weekly_consumption_probability),
+    annual_events_per_person = first(annual_events_per_person),
+    annual_consumption_events_us = first(annual_consumption_events_us),
+    median_p_illness = median(mean_p_illness, na.rm = TRUE),
+    p025_p_illness = quantile(mean_p_illness, 0.025, na.rm = TRUE),
+    p975_p_illness = quantile(mean_p_illness, 0.975, na.rm = TRUE),
+    median_annual_illnesses_us = median(annual_illnesses_us, na.rm = TRUE),
+    p025_annual_illnesses_us = quantile(annual_illnesses_us, 0.025, na.rm = TRUE),
+    p975_annual_illnesses_us = quantile(annual_illnesses_us, 0.975, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(food_category, target_temperature_C, time_min, serving_size)
+
+format_count_label <- function(x) {
+  formatC(x, format = "f", digits = 0, big.mark = ",")
+}
+
+format_burden_interval <- function(median_value, lower_value, upper_value) {
+  paste0(
+    format_count_label(median_value),
+    " [",
+    format_count_label(lower_value),
+    ", ",
+    format_count_label(upper_value),
+    "]"
+  )
+}
+
+module4_us_annual_illness_manuscript_table <- bind_rows(
+  module4_us_annual_illness_summary %>%
+    filter(food_category == "raw_oysters"),
+  module4_us_annual_illness_summary %>%
+    filter(food_category == "cooked_oysters") %>%
+    group_by(target_temperature_C, serving_size) %>%
+    filter(median_p_illness < 0.001) %>%
+    slice_min(time_min, n = 1, with_ties = FALSE) %>%
+    ungroup()
+) %>%
+  mutate(
+    Food = recode(
+      food_category,
+      raw_oysters = "Raw oysters",
+      cooked_oysters = "Cooked oysters"
+    ),
+    `Cooking condition` = if_else(
+      food_category == "raw_oysters",
+      "No cooking",
+      paste0(target_temperature_C, " °C for ", format_time_min_label(time_min), " min")
+    ),
+    `Serving (oysters)` = serving_size,
+    `Annual U.S. eating events` = format_count_label(annual_consumption_events_us),
+    `Median annual illnesses (95% UI)` = format_burden_interval(
+      median_annual_illnesses_us,
+      p025_annual_illnesses_us,
+      p975_annual_illnesses_us
+    )
+  ) %>%
+  select(
+    Food,
+    `Cooking condition`,
+    `Serving (oysters)`,
+    `Annual U.S. eating events`,
+    `Median annual illnesses (95% UI)`
+  )
+
+saveRDS(
+  module4_burden_by_uncertainty,
+  file.path(module4_results_dir, "module4_us_annual_illness_by_uncertainty.rds")
+)
+write_csv(
+  module4_burden_by_uncertainty,
+  file.path(module4_results_dir, "module4_us_annual_illness_by_uncertainty.csv")
+)
+saveRDS(
+  module4_us_annual_illness_summary,
+  file.path(module4_results_dir, "module4_us_annual_illness_summary.rds")
+)
+write_csv(
+  module4_us_annual_illness_summary,
+  file.path(module4_results_dir, "module4_us_annual_illness_summary.csv")
+)
+write_csv(
+  module4_us_annual_illness_manuscript_table,
+  file.path(module4_results_dir, "module4_us_annual_illness_manuscript_table.csv")
+)
+
+module4_us_annual_illness_manuscript_table
+```

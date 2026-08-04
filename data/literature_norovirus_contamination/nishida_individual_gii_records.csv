@@ -1,0 +1,64 @@
+study_id,total_sample_n,month_year,area,amplicon,genogroup_genotype,concentration_copies_per_oyster,censoring,lower_copies_per_oyster,upper_copies_per_oyster,source_note
+Nishida_2003,191,Jan-02,A,A-1,II,2700,exact,2700,2700,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Jan-02,A,A-2,II,2900,exact,2900,2900,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Jan-02,A,A-3,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Jan-02,A,A-4,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Jan-02,A,A-5,II,7500,exact,7500,7500,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Jan-02,A,A-6,II,160,exact,160,160,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Jan-02,A,A-8,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Jan-02,B,B-1,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Jan-02,B,B-2,II,620,exact,620,620,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Jan-02,B,B-3,II,150,exact,150,150,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Feb-02,A,A-10,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Feb-02,A,A-11,II,140,exact,140,140,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2003,191,Feb-02,A,A-12,II,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2003,191,Feb-02,B,B-5,II,480,exact,480,480,Table 2 exact quantified GII value; units are NV genome copies per oyster.
+Nishida_2007,1512,Nov-02,A,A-1,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-02,A,A-2,II/4,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-02,B,B-2,II/untypable,910,exact,910,910,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-02,B,B-3,II/untypable,830,exact,830,830,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-02,B,B-4,II/6,380,exact,380,380,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-02,B,B-5,II/4,210,exact,210,210,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-02,B,B-6,II/14,580,exact,580,580,Table 2 exact quantified GII value.
+Nishida_2007,1512,Jan-03,A,A-3,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,A,A-4,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,A,A-5,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,A,A-6,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,A,A-7,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,A,A-8,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,B,B-7,II/6,1700,exact,1700,1700,Table 2 exact quantified GII value.
+Nishida_2007,1512,Jan-03,B,B-11,II/4,1800,exact,1800,1800,Table 2 exact quantified GII value.
+Nishida_2007,1512,Jan-03,B,B-16,II/8,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,B,B-17,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-03,B,B-18,II/8,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-9,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-10,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-11,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-12,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-13,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-14,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-15,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-16,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-17,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-18,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-19,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-20,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-21,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-22,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-23,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-24,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,A,A-25,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Dec-03,B,B-21,II/3,140,exact,140,140,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-03,B,B-22,II/3,400,exact,400,400,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-03,B,B-23,II/3,960,exact,960,960,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-03,B,B-24,II/3,1000,exact,1000,1000,Table 2 exact quantified GII value.
+Nishida_2007,1512,Dec-03,B,B-25,II/3,990,exact,990,990,Table 2 exact quantified GII value.
+Nishida_2007,1512,Jan-04,A,A-27,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-04,A,A-28,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-04,A,A-29,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-04,A,A-30,II/5,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-04,A,A-31,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Jan-04,A,A-32,II/2,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Feb-04,B,B-30,II/3,,left_censored,1,100,Table 2; ND reported as not detected below 100 copies/oyster.
+Nishida_2007,1512,Feb-05,B,B-36,II/4,990,exact,990,990,Table 2 exact quantified GII value.
+Nishida_2007,1512,Feb-05,B,B-37,II/3,410,exact,410,410,Table 2 exact quantified GII value.
