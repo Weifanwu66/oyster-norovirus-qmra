@@ -22,11 +22,9 @@ set.seed(1050)
 n_variability <- ndvar(10000)
 n_uncertainty <- ndunc(500)
 
-module2_results_dir <- here("results", "module_02_infectious_ratio")
 module3_results_dir <- here("results", "module_03_thermal_inactivation_oyster")
 module4_results_dir <- here("results", "module_04_serving_risk")
 figure_dir <- here("outputs", "figures")
-dir.create(module2_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(module3_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(module4_results_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
@@ -430,7 +428,7 @@ ggsave(
 
 ## Purpose
 
-Module 2 defines the provisional genome-copy-to-infectious-unit conversion as
+Module 2 defines the genome-copy-to-infectious-unit conversion as
 an MC2D uncertainty node. The literature range is expressed as genome copies
 per infectious unit (GC/IU), so the model samples on that scale and takes the
 reciprocal to obtain infectious units per genome copy (IU/GC). The node is
@@ -439,46 +437,14 @@ propagated directly into the serving-level `VU` calculations in Module 4.
 ## Infectious Ratio
 
 ```{r}
-gc_per_iu_lower <- 30
-gc_per_iu_upper <- 5000
-
-module2_uncertainty_u <- list(
-  genome_copies_per_infectious_unit = mcstoc(
-    runif,
-    type = "U",
-    min = gc_per_iu_lower,
-    max = gc_per_iu_upper,
-    seed = 1060
-  )
+gc_per_iu_u <- mcstoc(
+  runif,
+  type = "U",
+  min = 30,
+  max = 5000,
+  seed = 1060
 )
-module2_uncertainty_u$infectious_units_per_genome_copy <-
-  1 / module2_uncertainty_u$genome_copies_per_infectious_unit
-
-# This table is for inspection and export; calculations retain the MC2D nodes.
-module2_uncertainty_inputs <- tibble(
-  uncertainty_iteration = seq_len(n_uncertainty),
-  genome_copies_per_infectious_unit = c(
-    module2_uncertainty_u$genome_copies_per_infectious_unit
-  ),
-  infectious_units_per_genome_copy = c(
-    module2_uncertainty_u$infectious_units_per_genome_copy
-  )
-)
-
-ggplot(module2_uncertainty_inputs, aes(x = genome_copies_per_infectious_unit)) +
-  geom_histogram(bins = 30) +
-  coord_cartesian(xlim = c(30, 5000)) +
-  scale_x_continuous(breaks = seq(30, 5000, by = 400)) +
-  theme_minimal(base_size = 13) +
-  labs(x = "Genome copies per infectious unit")
-
-head(module2_uncertainty_inputs)
-```
-
-## Save Module 2 File
-
-```{r}
-write_csv(module2_uncertainty_inputs, file.path(module2_results_dir, "module_02_uncertainty_inputs.csv"))
+iu_per_gc_u <- 1 / gc_per_iu_u
 ```
 
 # Module 3: Dynamic Geeraerd Cooking Reduction
@@ -829,8 +795,7 @@ module4_by_uncertainty <- pmap_dfr(
     summarize_condition_risk_compact_vu(
       serving_gc_vu = module4_serving_gc_vu,
       condition_survival_table = condition_survival_table,
-      infectious_units_per_genome_copy_u =
-        module2_uncertainty_u$infectious_units_per_genome_copy,
+      infectious_units_per_genome_copy_u = iu_per_gc_u,
       dose_response_uncertainty = dose_response_uncertainty_inputs,
       serving_sizes = c(6, 12)
     )
@@ -1073,7 +1038,9 @@ make_condition_sensitivity_sample <- function(
       module1_u_values$concentration_gamma_shape[uncertainty_column] *
       module1_u_values$concentration_gamma_scale[uncertainty_column],
     concentration_gamma_shape =
-      module1_u_values$concentration_gamma_shape[uncertainty_column]
+      module1_u_values$concentration_gamma_shape[uncertainty_column],
+    genome_copies_per_infectious_unit = c(gc_per_iu_u)[uncertainty_column],
+    infectious_units_per_genome_copy = c(iu_per_gc_u)[uncertainty_column]
   ) %>%
     left_join(
       condition_survival_inputs %>%
@@ -1088,7 +1055,6 @@ make_condition_sensitivity_sample <- function(
         ),
       by = "uncertainty_iteration"
     ) %>%
-    left_join(module2_uncertainty_inputs, by = "uncertainty_iteration") %>%
     left_join(
       dose_response_uncertainty_inputs %>%
         select(uncertainty_iteration, p_messner),
@@ -1252,8 +1218,7 @@ raw_oyster_survival_inputs <- tibble(
 module4_raw_by_uncertainty <- summarize_condition_risk_compact_vu(
   serving_gc_vu = module4_serving_gc_vu,
   condition_survival_table = raw_oyster_survival_inputs,
-  infectious_units_per_genome_copy_u =
-    module2_uncertainty_u$infectious_units_per_genome_copy,
+  infectious_units_per_genome_copy_u = iu_per_gc_u,
   dose_response_uncertainty = dose_response_uncertainty_inputs,
   serving_sizes = c(6, 12)
 ) %>%
