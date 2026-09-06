@@ -18,3 +18,9 @@ results/module_03_thermal_inactivation_oyster/*
 
 *.log
 Rplots.pdf
+
+# Local-only files
+run_hypergator_qmra.sh
+Weifan_Wu_Scientific_Interview_Presentation.pptx
+Salmonella_DR_pars.qmd
+.agents/
