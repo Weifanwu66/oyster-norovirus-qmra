@@ -80,7 +80,9 @@ p.inf.hyp1f1 <- function(a, b, D) {
   res <- numeric(length(D))
   pos_idx <- D > 1e-12
   if (any(pos_idx)) {
-    val <- gsl::hyperg_1F1(a, a + b, -D[pos_idx])
+    a_pos <- if (length(a) > 1) a[pos_idx] else a
+    b_pos <- if (length(b) > 1) b[pos_idx] else b
+    val <- gsl::hyperg_1F1(a_pos, a_pos + b_pos, -D[pos_idx])
     val[is.nan(val)] <- 0
     res[pos_idx] <- 1 - val
   }
