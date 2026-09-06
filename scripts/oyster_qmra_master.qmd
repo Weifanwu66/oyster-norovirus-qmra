@@ -12,6 +12,13 @@ execute:
 # Libraries and path
 
 ```{r}
+# Set library paths to include all installed R package locations on HyperGator
+.libPaths(c(
+  "/home/weifan.wu/R/x86_64-pc-linux-gnu-library/4.5",
+  "/home/weifan.wu/R/x86_64-pc-linux-gnu-library/4.3",
+  .libPaths()
+))
+
 library(here)
 library(tidyverse)
 library(mc2d)
