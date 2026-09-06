@@ -607,16 +607,21 @@ condition_grid <- readRDS(here("results", "module_03_exposure_assessment", "cond
 
 geeraerd_summary_rds <- here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.rds")
 meta_summary_rds     <- here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.rds")
+force_recompute      <- Sys.getenv("FORCE_RECOMPUTE", "FALSE") == "TRUE"
 
 # 1. Evaluate Baseline Model Risk (Dynamic Geeraerd)
-module4_output_summary_geeraerd <- evaluate_model_risk_summary(
-  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  condition_grid = condition_grid,
-  n_var = n_variability,
-  n_unc = n_uncertainty
-)
-saveRDS(module4_output_summary_geeraerd, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.rds"))
-write_csv(module4_output_summary_geeraerd, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.csv"))
+if (file.exists(geeraerd_summary_rds) && !force_recompute) {
+  module4_output_summary_geeraerd <- readRDS(geeraerd_summary_rds)
+} else {
+  module4_output_summary_geeraerd <- evaluate_model_risk_summary(
+    postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
+    condition_grid = condition_grid,
+    n_var = n_variability,
+    n_unc = n_uncertainty
+  )
+  saveRDS(module4_output_summary_geeraerd, geeraerd_summary_rds)
+  write_csv(module4_output_summary_geeraerd, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.csv"))
+}
 
 # Generate Baseline Risk Heatmap
 plot_module4_risk_heatmap(
@@ -625,14 +630,18 @@ plot_module4_risk_heatmap(
 )
 
 # 2. Evaluate Sensitivity Analysis Model Risk (Systematic Review Meta-Analysis / Mafart)
-module4_output_summary_meta <- evaluate_model_risk_summary(
-  postcook_nodes_list = mc2d_postcook_nodes_meta,
-  condition_grid = condition_grid,
-  n_var = n_variability,
-  n_unc = n_uncertainty
-)
-saveRDS(module4_output_summary_meta, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.rds"))
-write_csv(module4_output_summary_meta, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.csv"))
+if (file.exists(meta_summary_rds) && !force_recompute) {
+  module4_output_summary_meta <- readRDS(meta_summary_rds)
+} else {
+  module4_output_summary_meta <- evaluate_model_risk_summary(
+    postcook_nodes_list = mc2d_postcook_nodes_meta,
+    condition_grid = condition_grid,
+    n_var = n_variability,
+    n_unc = n_uncertainty
+  )
+  saveRDS(module4_output_summary_meta, meta_summary_rds)
+  write_csv(module4_output_summary_meta, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.csv"))
+}
 
 # Generate Sensitivity Risk Heatmap
 plot_module4_risk_heatmap(
@@ -721,41 +730,53 @@ infectious_dose_precook_node <- readRDS(here("results", "module_03_exposure_asse
 module4_output_summary_geeraerd <- readRDS(here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.rds"))
 module4_output_summary_meta <- readRDS(here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.rds"))
 
-# 1. Primary Baseline Model (Geeraerd Baseline)
-illness_burden_res_geeraerd <- calculate_us_illness_burden(
-  precook_node = infectious_dose_precook_node,
-  cooked_summary_df = module4_output_summary_geeraerd,
-  us_population = 341800000,
-  n_var = n_variability,
-  n_unc = n_uncertainty
-)
+rds_burden_geeraerd <- here("results", "module_04_risk_characterization", "illness_burden_res_geeraerd.rds")
+rds_burden_meta     <- here("results", "module_04_risk_characterization", "illness_burden_res_meta.rds")
+force_recompute     <- Sys.getenv("FORCE_RECOMPUTE", "FALSE") == "TRUE"
 
-write_csv(
-  illness_burden_res_geeraerd$full_summary,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary.csv")
-)
-write_csv(
-  illness_burden_res_geeraerd$manuscript_table,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table.csv")
-)
+# 1. Primary Baseline Model (Geeraerd Baseline)
+if (file.exists(rds_burden_geeraerd) && !force_recompute) {
+  illness_burden_res_geeraerd <- readRDS(rds_burden_geeraerd)
+} else {
+  illness_burden_res_geeraerd <- calculate_us_illness_burden(
+    precook_node = infectious_dose_precook_node,
+    cooked_summary_df = module4_output_summary_geeraerd,
+    us_population = 341800000,
+    n_var = n_variability,
+    n_unc = n_uncertainty
+  )
+  saveRDS(illness_burden_res_geeraerd, rds_burden_geeraerd)
+  write_csv(
+    illness_burden_res_geeraerd$full_summary,
+    here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary.csv")
+  )
+  write_csv(
+    illness_burden_res_geeraerd$manuscript_table,
+    here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table.csv")
+  )
+}
 
 # 2. Sensitivity Analysis Model (Meta-Analysis / Mafart Model)
-illness_burden_res_meta <- calculate_us_illness_burden(
-  precook_node = infectious_dose_precook_node,
-  cooked_summary_df = module4_output_summary_meta,
-  us_population = 341800000,
-  n_var = n_variability,
-  n_unc = n_uncertainty
-)
-
-write_csv(
-  illness_burden_res_meta$full_summary,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary_meta.csv")
-)
-write_csv(
-  illness_burden_res_meta$manuscript_table,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table_meta.csv")
-)
+if (file.exists(rds_burden_meta) && !force_recompute) {
+  illness_burden_res_meta <- readRDS(rds_burden_meta)
+} else {
+  illness_burden_res_meta <- calculate_us_illness_burden(
+    precook_node = infectious_dose_precook_node,
+    cooked_summary_df = module4_output_summary_meta,
+    us_population = 341800000,
+    n_var = n_variability,
+    n_unc = n_uncertainty
+  )
+  saveRDS(illness_burden_res_meta, rds_burden_meta)
+  write_csv(
+    illness_burden_res_meta$full_summary,
+    here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary_meta.csv")
+  )
+  write_csv(
+    illness_burden_res_meta$manuscript_table,
+    here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table_meta.csv")
+  )
+}
 
 illness_burden_res_geeraerd$manuscript_table
 illness_burden_res_meta$manuscript_table
