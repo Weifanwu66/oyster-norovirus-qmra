@@ -22,13 +22,6 @@ library(gsl)
 
 select <- dplyr::select
 
-# Configure graphics device for headless Linux HPC / RStudio server rendering
-options(bitmapType = "cairo")
-graphics.off()
-
-# Expand R vector memory limit for large 2D Monte Carlo matrices
-Sys.setenv(R_MAX_VSIZE = "100Gb")
-
 set.seed(2026)
 # Full high-resolution 2D Monte Carlo dimensions (N_V = 10,000 variability x N_U = 2,000 uncertainty)
 n_variability <- ndvar(10000)
