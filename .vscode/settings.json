@@ -1,0 +1,6 @@
+{
+    "r.rpath.linux": "/apps/R/4.3/bin/R",
+    "r.rterm.linux": "/apps/R/4.3/bin/R",
+    "r.alwaysUseActiveTerminal": true,
+    "r.bracketedPaste": false
+}
