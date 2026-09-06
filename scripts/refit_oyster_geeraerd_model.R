@@ -9,7 +9,7 @@ project_root <- here::here()
 data_dir <- file.path(project_root, "data", "module_03_thermal_inactivation_oyster")
 output_dir <- file.path(project_root, "results", "module_03_thermal_inactivation_oyster")
 
-source(file.path(project_root, "scripts", "module3_thermal_functions.R"))
+source(file.path(project_root, "scripts", "module2_thermal_functions.R"))
 
 # 1. Load Sammi's original data
 dyn_path <- file.path(data_dir, "d_oys_pfu.RDS")
