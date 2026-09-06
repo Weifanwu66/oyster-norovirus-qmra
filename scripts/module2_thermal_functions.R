@@ -447,7 +447,7 @@ make_post_cook_dose_for_condition <- function(
       stop("module3_results_dir is required when save_full = TRUE.", call. = FALSE)
     }
     dir.create(module3_results_dir, recursive = TRUE, showWarnings = FALSE)
-    saveRDS(post_this, here("results", "module_03_exposure_assessment", paste0("module3_post_cook_IU_target_", gsub("\\.", "p", target_C), "C_time_", gsub("\\.", "p", time_value),"min.rds")
+    saveRDS(post_this, file.path(module3_results_dir, paste0("module3_post_cook_IU_target_", gsub("\\.", "p", target_C), "C_time_", gsub("\\.", "p", time_value),"min.rds")
       )
     )
   }

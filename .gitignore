@@ -17,3 +17,4 @@ results/module_03_thermal_inactivation_oyster/*
 !results/module_03_thermal_inactivation_oyster/module3_geeraerd_posterior_draws.rds
 
 *.log
+Rplots.pdf

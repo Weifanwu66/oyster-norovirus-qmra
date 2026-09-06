@@ -19,7 +19,11 @@ execute:
   .libPaths()
 ))
 
-library(here)
+if (requireNamespace("here", quietly = TRUE)) {
+  library(here)
+} else {
+  here <- function(...) file.path(getwd(), ...)
+}
 library(tidyverse)
 library(mc2d)
 library(brms)
