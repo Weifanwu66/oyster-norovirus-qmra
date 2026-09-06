@@ -498,7 +498,7 @@ run_module3_cooking_method_size_scenarios <- function(
     steam_path,
     bake_path,
     model_type = "geeraerd",
-    times_min = seq(0, 10, by = 2),
+    times_min = seq(0, 16, by = 2),
     n_unc = 1000
 ) {
   steam_S <- extract_cooking_profile_min(steam_path, "Small Cumulative", "steaming", "small")
