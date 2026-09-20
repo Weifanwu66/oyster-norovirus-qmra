@@ -396,35 +396,37 @@ plot_tornado_sensitivity <- function(
   post_mat <- unclass(post_node)[, , 1]
   
   n_v <- nrow(post_mat)
-  n_u <- ncol(post_mat)
-  
-  idx_v <- sample.int(n_v, n_sample, replace = TRUE)
-  idx_u <- sample.int(n_u, n_sample, replace = TRUE)
-  
-  postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
-  p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
+  n_u_raw <- ncol(post_mat)
   
   csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
   if (file.exists(csv_path)) {
     module1_u <- read_csv(csv_path, show_col_types = FALSE)
-    q_inv_val <- module1_u$q_inv[idx_u]
-    prev_mean_val <- module1_u$prevalence_mean[idx_u]
-    conc_mean_val <- module1_u$positive_mean_gc[idx_u]
-    conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+    n_u <- min(n_u_raw, nrow(module1_u))
+    q_inv_val <- module1_u$q_inv
+    prev_mean_val <- module1_u$prevalence_mean
+    conc_mean_val <- module1_u$positive_mean_gc
+    conc_shape_val <- module1_u$concentration_gamma_shape
   } else {
     stop("module1_uncertainty_inputs.csv not found!")
   }
   
-  teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
+  # Use EXACTLY n_u draws for Teunis to map 1-to-1 with uncertainty iterations
+  teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_u, replace = TRUE), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   b_val <- par2.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   n_val <- par2.btr(teunis_sel$w_mu, teunis_sel$z_mu)
+  p_se_val <- rbeta(n_u, shape1 = se_alpha, shape2 = se_beta)
   
-  dose_effective <- postcook_val
-  p_inf_se <- p.inf.hyp1f1(a_val, b_val, dose_effective)
-  p_ill_given_inf <- p.ill.inf(n_val, r_val, dose_effective)
-  p_illness <- p_se_val * p_inf_se * p_ill_given_inf
+  # Calculate MEAN risk per uncertainty iteration
+  mean_p_illness <- numeric(n_u)
+  for (u in seq_len(n_u)) {
+    dose_u <- post_mat[, u]
+    p_inf_se <- p.inf.hyp1f1(a_val[u], b_val[u], dose_u)
+    p_ill_given_inf <- p.ill.inf(n_val[u], r_val[u], dose_u)
+    p_ill_u <- p_se_val[u] * p_inf_se * p_ill_given_inf
+    mean_p_illness[u] <- mean(p_ill_u)
+  }
   
   input_data <- tibble(
     `Harvest Prevalence (P_prev)` = prev_mean_val,
@@ -443,10 +445,10 @@ plot_tornado_sensitivity <- function(
     set.seed(1503)
     therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
-      `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
-      `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u],
-      `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0[idx_u]
+      `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z,
+      `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R,
+      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin,
+      `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0
     )
     title_text <- "Dynamic Geeraerd Inactivation Model"
   } else {
@@ -454,15 +456,15 @@ plot_tornado_sensitivity <- function(
     set.seed(1503)
     therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
-      `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish[idx_u],
-      `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell[idx_u],
-      `Mafart Shape Parameter (p)` = therm_post$p_weibull[idx_u]
+      `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish,
+      `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell,
+      `Mafart Shape Parameter (p)` = therm_post$p_weibull
     )
     title_text <- "Dynamic Meta-Analysis Inactivation Model"
   }
   
   cor_df <- map_dfr(names(input_data), function(var_name) {
-    rho <- cor(input_data[[var_name]], p_illness, method = "spearman", use = "pairwise.complete.obs")
+    rho <- cor(input_data[[var_name]], mean_p_illness, method = "spearman", use = "pairwise.complete.obs")
     tibble(
       input = var_name,
       spearman_rho = rho,
@@ -529,7 +531,15 @@ run_monte_carlo_filtering <- function(
   post_mat <- unclass(post_node)[, , 1]
   
   n_v <- nrow(post_mat)
-  n_u <- ncol(post_mat)
+  n_u_raw <- ncol(post_mat)
+  
+  csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
+  if (file.exists(csv_path)) {
+    module1_u <- read_csv(csv_path, show_col_types = FALSE)
+    n_u <- min(n_u_raw, nrow(module1_u))
+  } else {
+    stop("module1_uncertainty_inputs.csv not found!")
+  }
   
   idx_v <- sample.int(n_v, n_sample, replace = TRUE)
   idx_u <- sample.int(n_u, n_sample, replace = TRUE)
@@ -537,16 +547,10 @@ run_monte_carlo_filtering <- function(
   postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
   p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
   
-  csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
-  if (file.exists(csv_path)) {
-    module1_u <- read_csv(csv_path, show_col_types = FALSE)
     q_inv_val <- module1_u$q_inv[idx_u]
     prev_mean_val <- module1_u$prevalence_mean[idx_u]
     conc_mean_val <- module1_u$positive_mean_gc[idx_u]
     conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
-  } else {
-    stop("module1_uncertainty_inputs.csv not found!")
-  }
   
   teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
