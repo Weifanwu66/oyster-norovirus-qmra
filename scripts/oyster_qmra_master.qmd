@@ -864,6 +864,7 @@ p_annual_meta
 ## Simulation Numerical Convergence Assessment
 
 ```{r module5-simulation-convergence-assessment}
+source(here("scripts", "module4_sensitivity_analysis_functions.R"))
 infectious_dose_precook_node <- readRDS(here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
 
 # Assess numerical stability of Mean P(illness) across N_var and N_unc
