@@ -538,6 +538,14 @@ for (u in seq_len(n_uncertainty)) {
   infectious_dose_precook_matrix[positive, u] <- raw_gc * q_u[u]
 }
 
+module1_uncertainty_inputs <- tibble(
+  uncertainty_iteration = seq_len(n_uncertainty),
+  prevalence_mean = prevalence_selected_u,
+  positive_mean_gc = concentration_selected$positive_mean_gc,
+  concentration_gamma_shape = concentration_selected$concentration_gamma_shape,
+  q_inv = q_inv_u
+)
+write_csv(module1_uncertainty_inputs, here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"))
 infectious_dose_precook_node <- mcdata(infectious_dose_precook_matrix, type = "VU")
 saveRDS(infectious_dose_precook_node, here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
 

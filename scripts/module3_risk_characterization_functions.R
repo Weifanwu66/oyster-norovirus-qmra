@@ -369,11 +369,11 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
 #' Plot Tornado Sensitivity Diagram for Norovirus Illness Risk P(illness)
 plot_tornado_sensitivity <- function(
   postcook_nodes_list,
+  output_filepath = NULL,
   teunis_draws = NULL,
   se_alpha = NULL,
   se_beta = NULL,
-  n_sample = 10000,
-  output_filepath = NULL
+  n_sample = 5000
 ) {
   set.seed(4040)
   
@@ -393,6 +393,9 @@ plot_tornado_sensitivity <- function(
   post_node <- postcook_nodes_list[[scen_key]]
   post_mat <- unclass(post_node)[, , 1]
   
+  precook_node <- readRDS(here::here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
+  precook_mat <- unclass(precook_node)[, , 1]
+  
   n_v <- nrow(post_mat)
   n_u <- ncol(post_mat)
   
@@ -400,12 +403,21 @@ plot_tornado_sensitivity <- function(
   idx_u <- sample.int(n_u, n_sample, replace = TRUE)
   
   postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
+  precook_virion_val <- sapply(seq_len(n_sample), function(i) precook_mat[idx_v[i], idx_u[i]])
+  
   p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
-
-  set.seed(2026)
-  q_u_vec <- 1 / (10^runif(n_u, min = 3.39, max = 4.22))
-  q_val <- q_u_vec[idx_u]
-
+  
+  module1_u <- read_csv(here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"), show_col_types = FALSE)
+  
+  q_inv_val <- module1_u$q_inv[idx_u]
+  prev_mean_val <- module1_u$prevalence_mean[idx_u]
+  conc_mean_val <- module1_u$positive_mean_gc[idx_u]
+  conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+  
+  # Compute original serving metrics
+  serving_initial_gc_val <- precook_virion_val * q_inv_val
+  serving_positive_oysters_val <- as.numeric(precook_virion_val > 0)
+  
   dose_effective <- postcook_val
   
   teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
@@ -419,13 +431,17 @@ plot_tornado_sensitivity <- function(
   p_illness <- p_se_val * p_inf_se * p_ill_given_inf
   
   input_data <- tibble(
-    `Post-cook Infectious Dose (Virions)` = postcook_val,
-    `Infectious Ratio Q (Virions/GC)` = q_val,
-    `Host Susceptibility P(Se+)` = p_se_val,
-    `Teunis DR Alpha (Infection)` = a_val,
-    `Teunis DR Beta (Infection)` = b_val,
-    `Teunis DR Eta (Illness)` = n_val,
-    `Teunis DR Rho (Illness)` = r_val
+    serving_initial_gii_gc = serving_initial_gc_val,
+    serving_positive_oysters = serving_positive_oysters_val,
+    prevalence_mean = prev_mean_val,
+    positive_mean_gc = conc_mean_val,
+    concentration_gamma_shape = conc_shape_val,
+    q_inv = q_inv_val,
+    se_p = p_se_val,
+    teunis_alpha = a_val,
+    teunis_beta = b_val,
+    teunis_eta = n_val,
+    teunis_rho = r_val
   )
   
   cor_df <- map_dfr(names(input_data), function(var_name) {
@@ -438,6 +454,7 @@ plot_tornado_sensitivity <- function(
     )
   }) %>%
     arrange(desc(abs_rho)) %>%
+    filter(!is.na(spearman_rho)) %>%
     mutate(input = fct_reorder(input, abs_rho))
   
   p <- ggplot(cor_df, aes(x = spearman_rho, y = input, fill = direction)) +
@@ -457,7 +474,7 @@ plot_tornado_sensitivity <- function(
     )
   
   if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8, height = 4.8, dpi = 300, compression = "lzw")
-
+  
   p
 }
 
@@ -498,7 +515,14 @@ run_monte_carlo_filtering <- function(
   
   postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
   p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
-
+  
+  module1_u <- read_csv(here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"), show_col_types = FALSE)
+  
+  q_inv_val <- module1_u$q_inv[idx_u]
+  prev_mean_val <- module1_u$prevalence_mean[idx_u]
+  conc_mean_val <- module1_u$positive_mean_gc[idx_u]
+  conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+  
   teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   b_val <- par2.btr(teunis_sel$w_eta, teunis_sel$z_eta)
@@ -508,25 +532,22 @@ run_monte_carlo_filtering <- function(
   p_inf_se <- p.inf.hyp1f1(a_val, b_val, postcook_val)
   p_ill_given_inf <- p.ill.inf(n_val, r_val, postcook_val)
   p_illness <- p_se_val * p_inf_se * p_ill_given_inf
-
-  # Partition iterations into Unsafe (B: P_ill >= cutoff) vs Safe (B_bar: P_ill < cutoff)
+  
   is_unsafe <- p_illness >= cutoff
-
-  set.seed(2026)
-  q_u_vec <- 1 / (10^runif(n_u, min = 3.39, max = 4.22))
-  q_val <- q_u_vec[idx_u]
-
+  
   input_data <- tibble(
     `Post-cook Infectious Dose (Virions)` = postcook_val,
-    `Infectious Ratio Q (Virions/GC)` = q_val,
+    `Infectious Ratio Q_inv (GC/Virion)` = q_inv_val,
+    `Prevalence Mean` = prev_mean_val,
+    `Positive Mean GC` = conc_mean_val,
+    `Concentration Gamma Shape` = conc_shape_val,
     `Host Susceptibility P(Se+)` = p_se_val,
     `Teunis DR Alpha (Infection)` = a_val,
     `Teunis DR Beta (Infection)` = b_val,
     `Teunis DR Eta (Illness)` = n_val,
     `Teunis DR Rho (Illness)` = r_val
   )
-
-  # Two-sample Kolmogorov-Smirnov test for each parameter
+  
   ks_table <- map_dfr(names(input_data), function(param_name) {
     val_unsafe <- input_data[[param_name]][is_unsafe]
     val_safe   <- input_data[[param_name]][!is_unsafe]
@@ -538,21 +559,16 @@ run_monte_carlo_filtering <- function(
       Parameter = param_name,
       `KS_D_statistic` = as.numeric(ks_res$statistic),
       `p_value` = ks_res$p.value,
-      `Unsafe_Mean` = mean(val_unsafe),
-      `Safe_Mean` = mean(val_safe)
+      n_unsafe = length(val_unsafe),
+      n_safe = length(val_safe)
     )
-  })
+  }) %>%
+    arrange(desc(KS_D_statistic))
   
-  if (nrow(ks_table) > 0) {
-    ks_table <- ks_table %>% arrange(desc(KS_D_statistic))
-  }
-
   list(
-    ks_table = ks_table,
-    sample_df = input_data %>% mutate(is_unsafe = is_unsafe, p_illness = p_illness),
-    cutoff = cutoff,
-    n_unsafe = sum(is_unsafe),
-    n_safe = sum(!is_unsafe)
+    input_data = input_data,
+    is_unsafe = is_unsafe,
+    ks_table = ks_table
   )
 }
 
@@ -647,8 +663,8 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
     facet_wrap(~ Dimension, scales = "free_x") +
     scale_color_manual(values = c("Variability" = "#2980B9", "Uncertainty" = "#C0392B")) +
     labs(
-      x = "Sample size",
-      y = "Mean HuNoV G2 illness risk P(illness)",
+      x = "Iteration",
+      y = "Mean HuNoV illness risk P(illness)",
       color = NULL
     ) +
     theme_bw(base_size = 11) +
@@ -657,9 +673,7 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
       strip.background = element_rect(fill = "grey92", color = "grey55"),
       strip.text = element_text(face = "bold", size = 11)
     )
-
-  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 9, height = 4.5, dpi = 300, compression = "lzw")
-
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8, height = 4, dpi = 300, compression = "lzw")
   p
 }
 
