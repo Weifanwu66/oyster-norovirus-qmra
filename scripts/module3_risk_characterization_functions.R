@@ -428,14 +428,14 @@ plot_tornado_sensitivity <- function(
   
   input_data <- tibble(
     `Harvest Prevalence (P_prev)` = prev_mean_val,
-    `Positive Mean Concentration (mu_conc)` = conc_mean_val,
-    `Positive Concentration Shape (kappa_conc)` = conc_shape_val,
-    `RT-qPCR: Infectious Virion Ratio (Q)` = 1 / q_inv_val,
+    `Positive Mean Concentration (μ_conc)` = conc_mean_val,
+    `Positive Concentration Shape (κ_conc)` = conc_shape_val,
+    `RT-qPCR: Infectious Virus Ratio (Q)` = 1 / q_inv_val,
     `Host Secretor Susceptibility P(Se+)` = p_se_val,
-    `Teunis DR alpha (Infection)` = a_val,
-    `Teunis DR beta (Infection)` = b_val,
-    `Teunis DR eta (Illness)` = n_val,
-    `Teunis DR rho (Illness)` = r_val
+    `DR α (Infection)` = a_val,
+    `DR β (Infection)` = b_val,
+    `DR η (Illness)` = n_val,
+    `DR ρ (Illness)` = r_val
   )
   
   if (model_type == "geeraerd") {
@@ -563,14 +563,14 @@ run_monte_carlo_filtering <- function(
   
   input_data <- tibble(
     `Harvest Prevalence (P_prev)` = prev_mean_val,
-    `Positive Mean Concentration (mu_conc)` = conc_mean_val,
-    `Positive Concentration Shape (kappa_conc)` = conc_shape_val,
-    `RT-qPCR: Infectious Virion Ratio (Q)` = 1 / q_inv_val,
+    `Positive Mean Concentration (μ_conc)` = conc_mean_val,
+    `Positive Concentration Shape (κ_conc)` = conc_shape_val,
+    `RT-qPCR: Infectious Virus Ratio (Q)` = 1 / q_inv_val,
     `Host Secretor Susceptibility P(Se+)` = p_se_val,
-    `Teunis DR alpha (Infection)` = a_val,
-    `Teunis DR beta (Infection)` = b_val,
-    `Teunis DR eta (Illness)` = n_val,
-    `Teunis DR rho (Illness)` = r_val
+    `DR α (Infection)` = a_val,
+    `DR β (Infection)` = b_val,
+    `DR η (Illness)` = n_val,
+    `DR ρ (Illness)` = r_val
   )
   
   if (model_type == "geeraerd") {
