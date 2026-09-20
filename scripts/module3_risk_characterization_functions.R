@@ -595,8 +595,8 @@ run_monte_carlo_filtering <- function(
   }
   
   ks_table <- map_dfr(names(input_data), function(param_name) {
-    val_unsafe <- input_data[[param_name]][is_unsafe]
-    val_safe   <- input_data[[param_name]][!is_unsafe]
+    val_unsafe <- na.omit(input_data[[param_name]][is_unsafe])
+    val_safe   <- na.omit(input_data[[param_name]][!is_unsafe])
     
     if (length(val_unsafe) == 0 || length(val_safe) == 0) return(NULL)
     
@@ -609,6 +609,7 @@ run_monte_carlo_filtering <- function(
       n_safe = length(val_safe)
     )
   }) %>%
+    mutate(`p_value_BH_FDR` = p.adjust(p_value, method = "BH")) %>%
     arrange(desc(KS_D_statistic))
   
   list(
@@ -727,8 +728,10 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
 run_mcf_scenario_matrix <- function(
   postcook_nodes_list,
   cutoff = 0.0001,
-  n_sample = 10000
+  n_sample = 10000,
+  model_type = c("geeraerd", "meta")
 ) {
+  model_type <- match.arg(model_type)
   scen_names <- names(postcook_nodes_list)
   
   col_unsafe <- sprintf("Unsafe Iterations (P >= %g)", cutoff)
@@ -740,7 +743,8 @@ run_mcf_scenario_matrix <- function(
     mcf_res <- run_monte_carlo_filtering(
       postcook_nodes_list = setNames(list(post_node), scen_key),
       cutoff = cutoff,
-      n_sample = n_sample
+      n_sample = n_sample,
+      model_type = model_type
     )
     
     parts <- strsplit(scen_key, "_")[[1]]
@@ -748,19 +752,21 @@ run_mcf_scenario_matrix <- function(
     size <- str_to_title(parts[2])
     time_min <- as.numeric(gsub("min", "", parts[3]))
     
-    top_param <- if (mcf_res$n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$Parameter[1] else "None (Fully Safe)"
-    top_d     <- if (mcf_res$n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$KS_D_statistic[1] else NA_real_
+    n_unsafe <- sum(mcf_res$is_unsafe)
+    n_safe <- sum(!mcf_res$is_unsafe)
+    
+    top_param <- if (n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$Parameter[1] else "None (Fully Safe)"
+    top_d     <- if (n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$KS_D_statistic[1] else NA_real_
     
     res_df <- tibble(
       `Cooking Method` = method,
       `Oyster size` = size,
       `Holding Time (min)` = time_min
     )
-    res_df[[col_unsafe]] <- mcf_res$n_unsafe
-    res_df[[col_safe]]   <- mcf_res$n_safe
-    res_df$`Unsafe Rate (%)` <- round((mcf_res$n_unsafe / n_sample) * 100, 2)
-    res_df$`Top Critical Driver` <- top_param
-    res_df$`KS D Statistic` <- round(top_d, 4)
+    res_df[[col_unsafe]] <- n_unsafe
+    res_df[[col_safe]]   <- n_safe
+    res_df$`Top Associated Parameter` <- top_param
+    res_df$`KS D-Statistic` <- top_d
     res_df
   })
 }
