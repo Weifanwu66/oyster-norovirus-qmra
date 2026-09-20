@@ -660,6 +660,11 @@ read_csv(here("results", "module1_3_exposure_dose_calculation", "module1_3_per_o
 
 # Module 2 & 3: Hazard & Risk Characterization
 
+```{r module2-hazard-characterization}
+source(here("scripts", "module2_hazard_characterization_functions.R"))
+```
+
+
 ## Purpose
 
 Module 2 receives the 2D per-oyster exposure dose matrices from Section 1.3, constructs 6-oyster and 12-oyster mixed servings (with post-hoc size mixing across Small, Medium, and Large oysters), and evaluates infection and illness risk per serving.
