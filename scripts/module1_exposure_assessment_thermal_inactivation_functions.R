@@ -1,4 +1,4 @@
-# Module 3 thermal workflows
+# Module 1: Exposure Assessment (Thermal Inactivation) Function Library
 # Observed fitting/overlay uses measured replicate-specific profiles.
 # Scenario prediction uses averaged/interpolated representative profiles.
 
