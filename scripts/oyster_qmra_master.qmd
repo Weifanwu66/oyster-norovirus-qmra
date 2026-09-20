@@ -916,17 +916,13 @@ Uncertainty sensitivity analysis was conducted using Spearman rank correlation c
 mc2d_postcook_nodes_geeraerd <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_geeraerd.rds"))
 mc2d_postcook_nodes_meta  <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_meta.rds"))
 
-# 1. Tornado Plot for Baseline Model (Geeraerd)
-plot_tornado_sensitivity(
-  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_geeraerd.tiff"), model_type = "geeraerd"
+# Combined Tornado Plot for Baseline (Geeraerd) and Meta-Analysis Models
+plot_combined_tornado_sensitivity(
+  postcook_nodes_list_geeraerd = mc2d_postcook_nodes_geeraerd,
+  postcook_nodes_list_meta = mc2d_postcook_nodes_meta,
+  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_combined.tiff")
 )
 
-# 2. Tornado Plot for Sensitivity Model (Meta-Analysis)
-plot_tornado_sensitivity(
-  postcook_nodes_list = mc2d_postcook_nodes_meta,
-  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_meta.tiff"), model_type = "meta"
-)
 ```
 
 ## Regional Sensitivity Analysis: Monte Carlo Filtering (MCF)
