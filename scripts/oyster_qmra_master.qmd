@@ -880,6 +880,28 @@ write_csv(conv_res, here("results", "module4_sensitivity_analysis", "module4_num
 plot_simulation_convergence(conv_res, here("figures", "module4_numerical_convergence_plot.tiff"))
 ```
 
+```{r module1-save-uncertainty-inputs}
+# This lightweight chunk extracts the exact uncertainty parameters generated earlier
+# and saves them so the Tornado Plot and MCF analysis can access them directly.
+set.seed(2025)
+prevalence_selected_u <- as.numeric(mc2d_prevalence_node)
+concentration_selected <- nishida_concentration_posterior[
+  sample.int(nrow(nishida_concentration_posterior), n_uncertainty, replace = TRUE), 
+]
+
+set.seed(2026)
+q_inv_u <- 10^runif(n_uncertainty, min = 3.39, max = 4.22)
+
+module1_uncertainty_inputs <- tibble(
+  uncertainty_iteration = seq_len(n_uncertainty),
+  prevalence_mean = prevalence_selected_u,
+  positive_mean_gc = concentration_selected$positive_mean_gc,
+  concentration_gamma_shape = concentration_selected$concentration_gamma_shape,
+  q_inv = q_inv_u
+)
+write_csv(module1_uncertainty_inputs, here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"))
+```
+
 ## Uncertainty Parameter Sensitivity Analysis (Spearman Tornado Plot)
 
 Uncertainty sensitivity analysis was conducted using Spearman rank correlation coefficients ($\rho$) to evaluate the monotonic relationship between primitive uncertain model input parameters and uncertainty-level mean illness probability.
@@ -891,13 +913,13 @@ mc2d_postcook_nodes_meta  <- readRDS(here("results", "module1_3_exposure_dose_ca
 # 1. Tornado Plot for Baseline Model (Geeraerd)
 plot_tornado_sensitivity(
   postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_geeraerd.tiff")
+  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_geeraerd.tiff"), model_type = "geeraerd"
 )
 
 # 2. Tornado Plot for Sensitivity Model (Meta-Analysis)
 plot_tornado_sensitivity(
   postcook_nodes_list = mc2d_postcook_nodes_meta,
-  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_meta.tiff")
+  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_meta.tiff"), model_type = "meta"
 )
 ```
 
@@ -907,7 +929,8 @@ plot_tornado_sensitivity(
 # Run MCF for Geeraerd (Representative Scenario: Steaming Medium 4 min)
 mcf_result_geeraerd <- run_monte_carlo_filtering(
   postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  cutoff = 0.0001
+  cutoff = 0.0001,
+  model_type = "geeraerd"
 )
 write_csv(mcf_result_geeraerd$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_geeraerd.csv"))
 plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_parameter_geeraerd.tiff"))
@@ -915,7 +938,8 @@ plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_pa
 # Run MCF for Meta-Analysis (Representative Scenario: Steaming Medium 4 min)
 mcf_result_meta <- run_monte_carlo_filtering(
   postcook_nodes_list = mc2d_postcook_nodes_meta,
-  cutoff = 0.0001
+  cutoff = 0.0001,
+  model_type = "meta"
 )
 write_csv(mcf_result_meta$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_meta.csv"))
 plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parameter_meta.tiff"))
@@ -925,14 +949,16 @@ plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parame
 # 1. Run Monte Carlo Filtering Loop across all scenarios - Primary Baseline Model (Geeraerd)
 mcf_matrix_geeraerd <- run_mcf_scenario_matrix(
   postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  cutoff = 0.0001
+  cutoff = 0.0001,
+  model_type = "geeraerd"
 )
 write_csv(mcf_matrix_geeraerd, here("results", "module4_sensitivity_analysis", "module4_mcf_scenario_safety_matrix_geeraerd.csv"))
 
 # 2. Run Monte Carlo Filtering Loop across all scenarios - Sensitivity Model (Meta-Analysis)
 mcf_matrix_meta <- run_mcf_scenario_matrix(
   postcook_nodes_list = mc2d_postcook_nodes_meta,
-  cutoff = 0.0001
+  cutoff = 0.0001,
+  model_type = "meta"
 )
 write_csv(mcf_matrix_meta, here("results", "module4_sensitivity_analysis", "module4_mcf_scenario_safety_matrix_meta.csv"))
 ```

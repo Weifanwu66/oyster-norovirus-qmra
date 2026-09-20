@@ -373,8 +373,10 @@ plot_tornado_sensitivity <- function(
   teunis_draws = NULL,
   se_alpha = NULL,
   se_beta = NULL,
-  n_sample = 5000
+  n_sample = 5000,
+  model_type = c("geeraerd", "meta")
 ) {
+  model_type <- match.arg(model_type)
   set.seed(4040)
   
   if (is.null(teunis_draws)) {
@@ -393,9 +395,6 @@ plot_tornado_sensitivity <- function(
   post_node <- postcook_nodes_list[[scen_key]]
   post_mat <- unclass(post_node)[, , 1]
   
-  precook_node <- readRDS(here::here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
-  precook_mat <- unclass(precook_node)[, , 1]
-  
   n_v <- nrow(post_mat)
   n_u <- ncol(post_mat)
   
@@ -403,22 +402,18 @@ plot_tornado_sensitivity <- function(
   idx_u <- sample.int(n_u, n_sample, replace = TRUE)
   
   postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
-  precook_virion_val <- sapply(seq_len(n_sample), function(i) precook_mat[idx_v[i], idx_u[i]])
-  
   p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
   
-  module1_u <- read_csv(here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"), show_col_types = FALSE)
-  
-  q_inv_val <- module1_u$q_inv[idx_u]
-  prev_mean_val <- module1_u$prevalence_mean[idx_u]
-  conc_mean_val <- module1_u$positive_mean_gc[idx_u]
-  conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
-  
-  # Compute original serving metrics
-  serving_initial_gc_val <- precook_virion_val * q_inv_val
-  serving_positive_oysters_val <- as.numeric(precook_virion_val > 0)
-  
-  dose_effective <- postcook_val
+  csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
+  if (file.exists(csv_path)) {
+    module1_u <- read_csv(csv_path, show_col_types = FALSE)
+    q_inv_val <- module1_u$q_inv[idx_u]
+    prev_mean_val <- module1_u$prevalence_mean[idx_u]
+    conc_mean_val <- module1_u$positive_mean_gc[idx_u]
+    conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+  } else {
+    stop("module1_uncertainty_inputs.csv not found!")
+  }
   
   teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
@@ -426,23 +421,41 @@ plot_tornado_sensitivity <- function(
   r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   n_val <- par2.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   
+  dose_effective <- postcook_val
   p_inf_se <- p.inf.hyp1f1(a_val, b_val, dose_effective)
   p_ill_given_inf <- p.ill.inf(n_val, r_val, dose_effective)
   p_illness <- p_se_val * p_inf_se * p_ill_given_inf
   
   input_data <- tibble(
-    serving_initial_gii_gc = serving_initial_gc_val,
-    serving_positive_oysters = serving_positive_oysters_val,
-    prevalence_mean = prev_mean_val,
-    positive_mean_gc = conc_mean_val,
-    concentration_gamma_shape = conc_shape_val,
-    q_inv = q_inv_val,
-    se_p = p_se_val,
-    teunis_alpha = a_val,
-    teunis_beta = b_val,
-    teunis_eta = n_val,
-    teunis_rho = r_val
+    `Harvest Prevalence (P_prev)` = prev_mean_val,
+    `Positive Mean Concentration (mu_conc)` = conc_mean_val,
+    `Positive Concentration Shape (kappa_conc)` = conc_shape_val,
+    `RT-qPCR: Infectious Virion Ratio (Q)` = 1 / q_inv_val,
+    `Host Secretor Susceptibility P(Se+)` = p_se_val,
+    `Teunis DR alpha (Infection)` = a_val,
+    `Teunis DR beta (Infection)` = b_val,
+    `Teunis DR eta (Illness)` = n_val,
+    `Teunis DR rho (Illness)` = r_val
   )
+  
+  if (model_type == "geeraerd") {
+    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    input_data <- input_data %>% mutate(
+      `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
+      `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
+      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u],
+      `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0[idx_u]
+    )
+    title_text <- "Dynamic Geeraerd Inactivation Model"
+  } else {
+    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    input_data <- input_data %>% mutate(
+      `Mafart Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
+      `Mafart Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
+      `Mafart Shape Parameter (p)` = therm_post$p[idx_u]
+    )
+    title_text <- "Dynamic Meta-Analysis Inactivation Model"
+  }
   
   cor_df <- map_dfr(names(input_data), function(var_name) {
     rho <- cor(input_data[[var_name]], p_illness, method = "spearman", use = "pairwise.complete.obs")
@@ -450,7 +463,7 @@ plot_tornado_sensitivity <- function(
       input = var_name,
       spearman_rho = rho,
       abs_rho = abs(rho),
-      direction = if_else(rho >= 0, "Positive Correlation", "Negative Correlation")
+      direction = if_else(rho >= 0, "Positive Association", "Negative Association")
     )
   }) %>%
     arrange(desc(abs_rho)) %>%
@@ -460,15 +473,17 @@ plot_tornado_sensitivity <- function(
   p <- ggplot(cor_df, aes(x = spearman_rho, y = input, fill = direction)) +
     geom_col(width = 0.65) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
-    scale_fill_manual(values = c("Positive Correlation" = "#2F6F9F", "Negative Correlation" = "#B65C45")) +
-    scale_x_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.25)) +
+    scale_fill_manual(values = c("Positive Association" = "#2F6F9F", "Negative Association" = "#B65C45")) +
+    scale_x_continuous(limits = c(-0.45, 0.45), breaks = seq(-0.4, 0.4, by = 0.1)) +
     labs(
-      x = "Spearman Rank Correlation Coefficient (rho)",
+      title = title_text,
+      x = "Spearman Rank Correlation Coefficient (p)",
       y = NULL,
       fill = NULL
     ) +
     theme_bw(base_size = 11) +
     theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
       panel.grid.major.y = element_blank(),
       legend.position = "bottom"
     )
@@ -487,8 +502,10 @@ run_monte_carlo_filtering <- function(
   se_alpha = NULL,
   se_beta = NULL,
   cutoff = 0.0001,
-  n_sample = 10000
+  n_sample = 10000,
+  model_type = c("geeraerd", "meta")
 ) {
+  model_type <- match.arg(model_type)
   set.seed(5050)
   
   if (is.null(teunis_draws)) {
@@ -516,12 +533,16 @@ run_monte_carlo_filtering <- function(
   postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
   p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
   
-  module1_u <- read_csv(here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv"), show_col_types = FALSE)
-  
-  q_inv_val <- module1_u$q_inv[idx_u]
-  prev_mean_val <- module1_u$prevalence_mean[idx_u]
-  conc_mean_val <- module1_u$positive_mean_gc[idx_u]
-  conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+  csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
+  if (file.exists(csv_path)) {
+    module1_u <- read_csv(csv_path, show_col_types = FALSE)
+    q_inv_val <- module1_u$q_inv[idx_u]
+    prev_mean_val <- module1_u$prevalence_mean[idx_u]
+    conc_mean_val <- module1_u$positive_mean_gc[idx_u]
+    conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
+  } else {
+    stop("module1_uncertainty_inputs.csv not found!")
+  }
   
   teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
@@ -529,24 +550,41 @@ run_monte_carlo_filtering <- function(
   r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   n_val <- par2.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   
-  p_inf_se <- p.inf.hyp1f1(a_val, b_val, postcook_val)
-  p_ill_given_inf <- p.ill.inf(n_val, r_val, postcook_val)
+  dose_effective <- postcook_val
+  p_inf_se <- p.inf.hyp1f1(a_val, b_val, dose_effective)
+  p_ill_given_inf <- p.ill.inf(n_val, r_val, dose_effective)
   p_illness <- p_se_val * p_inf_se * p_ill_given_inf
   
   is_unsafe <- p_illness >= cutoff
   
   input_data <- tibble(
-    `Post-cook Infectious Dose (Virions)` = postcook_val,
-    `Infectious Ratio Q_inv (GC/Virion)` = q_inv_val,
-    `Prevalence Mean` = prev_mean_val,
-    `Positive Mean GC` = conc_mean_val,
-    `Concentration Gamma Shape` = conc_shape_val,
-    `Host Susceptibility P(Se+)` = p_se_val,
-    `Teunis DR Alpha (Infection)` = a_val,
-    `Teunis DR Beta (Infection)` = b_val,
-    `Teunis DR Eta (Illness)` = n_val,
-    `Teunis DR Rho (Illness)` = r_val
+    `Harvest Prevalence (P_prev)` = prev_mean_val,
+    `Positive Mean Concentration (mu_conc)` = conc_mean_val,
+    `Positive Concentration Shape (kappa_conc)` = conc_shape_val,
+    `RT-qPCR: Infectious Virion Ratio (Q)` = 1 / q_inv_val,
+    `Host Secretor Susceptibility P(Se+)` = p_se_val,
+    `Teunis DR alpha (Infection)` = a_val,
+    `Teunis DR beta (Infection)` = b_val,
+    `Teunis DR eta (Illness)` = n_val,
+    `Teunis DR rho (Illness)` = r_val
   )
+  
+  if (model_type == "geeraerd") {
+    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    input_data <- input_data %>% mutate(
+      `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
+      `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
+      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u],
+      `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0[idx_u]
+    )
+  } else {
+    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    input_data <- input_data %>% mutate(
+      `Mafart Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
+      `Mafart Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
+      `Mafart Shape Parameter (p)` = therm_post$p[idx_u]
+    )
+  }
   
   ks_table <- map_dfr(names(input_data), function(param_name) {
     val_unsafe <- input_data[[param_name]][is_unsafe]
