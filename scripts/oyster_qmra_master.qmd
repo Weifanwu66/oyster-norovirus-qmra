@@ -19,18 +19,19 @@ library(brms)
 library(loo)
 library(MASS)
 library(gsl)
+library(patchwork)
 
-select <- dplyr::select
+select <- select
 
 set.seed(2026)
 # Full high-resolution 2D Monte Carlo dimensions (N_V = 10,000 variability x N_U = 2,000 uncertainty)
 n_variability <- ndvar(10000)
 n_uncertainty <- ndunc(2000)
 
-module1_results_dir <- here("results", "module_01_initial_contamination")
-module2_results_dir <- here("results", "module_02_thermal_inactivation")
-module3_results_dir <- here("results", "module_03_exposure_assessment")
-module4_results_dir <- here("results", "module_04_risk_characterization")
+module1_results_dir <- here("results", "module1_1_initial_contamination")
+module2_results_dir <- here("results", "module1_2_thermal_inactivation")
+module3_results_dir <- here("results", "module1_3_exposure_dose_calculation")
+module4_results_dir <- here("results", "module4_sensitivity_analysis")
 figure_dir <- here("figures")
 
 dir.create(module1_results_dir, recursive = TRUE, showWarnings = FALSE)
@@ -42,16 +43,17 @@ dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
 
 This master QMD file connects the full 2D Monte Carlo QMRA pathway across four standard stages:
 
-1. **Module 1: Initial Contamination Distribution:** estimate oyster-level GII prevalence and positive concentration using a Bayesian hurdle model.
-2. **Module 2: Process Characterization (Thermal Inactivation):** apply cooking time-temperature profiles to estimate posterior survival fractions $S(U)$.
-3. **Module 3: Exposure Assessment:** generate 2D exposure dose matrices $D(V, U)$ ($10,000 \text{ servings} \times 2000 \text{ uncertainty iterations}$) for raw and cooked oysters.
-4. **Module 4: Hazard & Risk Characterization:** evaluate the Teunis et al. (2020) hypergeometric dose-response model ($1F1$) and host susceptibility distribution ($P(Se^+)$) directly on 2D exposure matrices $D(V, U)$, summarize risk, perform sensitivity analysis, and estimate annual U.S. illness burden.
+1. **Module 1: Exposure Assessment:** estimate oyster-level GII prevalence and positive concentration (1.1), apply cooking time-temperature profiles (1.2), and generate 2D exposure dose matrices (1.3).
+2. **Module 2: Hazard & Risk Characterization:** evaluate the dose-response model and host susceptibility directly on 2D exposure matrices, and estimate annual U.S. illness burden.
+3. **Module 3: Model Diagnostics and Sensitivity Analysis:** conduct numerical simulation diagnostics and comprehensive parameter sensitivity analyses.
 
-# Module 1: Initial Contamination Distribution for Norovirus GII in Oysters
+
+# Module 1: Exposure Assessment
+## 1.1 Initial Contamination Distribution for Norovirus GII in Oysters
 
 ## Purpose
 
-Module 1 estimates the distributions governing pre-cook norovirus GII genome
+Section 1.1 estimates the distributions governing pre-cook norovirus GII genome
 copies per oyster. It uses a two-part hurdle model fitted to Nishida 2003 and
 2007:
 
@@ -66,8 +68,8 @@ copies per oyster. It uses a two-part hurdle model fitted to Nishida 2003 and
    on GII positivity.
 
 The posterior draws from both models create 500 uncertainty scenarios for prevalence
-and positive-concentration parameters. Module 1 establishes the per-oyster baseline
-contamination parameters, while individual oyster variability is simulated downstream in Module 3.
+and positive-concentration parameters. Section 1.1 establishes the per-oyster baseline
+contamination parameters, while individual oyster variability is simulated downstream in Section 1.3.
 
 ## Inputs
 
@@ -89,7 +91,7 @@ $$
 p \sim \operatorname{Beta}(1 + 63, 1 + 1703 - 63) = \operatorname{Beta}(64, 1641)
 $$
 
-This pooled global prevalence distribution yields a population mean of **3.75%** (95% CrI: 2.90%–4.71%).
+This pooled global prevalence distribution yields a population mean of **3.75%** (95% CrI: 2.90%–4.71%), which will be preserved for risk characterization module
 
 ```{r module1-prevalence-pooled}
 mc2d_prevalence_node <- mcdata(rbeta(n_uncertainty, shape1 = 64, shape2 = 1641), type = "U")
@@ -113,21 +115,14 @@ p_prev_plot <- ggplot(prevalence_plot_df, aes(x = p_prev)) +
   geom_vline(xintercept = mean(c(mc2d_prevalence_node)), linetype = "dashed", color = "#D55E00", linewidth = 0.8) +
   scale_x_continuous(labels = scales::percent_format(accuracy = 0.1)) +
   labs(
-    x = "Norovirus GII Prevalence in Market Oysters",
+    x = "HuNoV GII prevalence in market oysters",
     y = "Density"
   ) +
   theme_minimal(base_size = 12)
-
 p_prev_plot
+
 ggsave(
-  here("figures", "module1_global_prevalence_distribution.png"),
-  p_prev_plot,
-  width = 7,
-  height = 4,
-  dpi = 300
-)
-ggsave(
-  here("figures", "module1_global_prevalence_distribution.tiff"),
+  here("figures", "module1_1_global_prevalence_distribution.tiff"),
   p_prev_plot,
   width = 7,
   height = 4,
@@ -180,9 +175,6 @@ concentration_lognormal_priors <- c(
   set_prior("student_t(3, 0, 2)", class = "sigma")
 )
 
-module1_results_dir <- here("results", "module_01_initial_contamination")
-dir.create(module1_results_dir, recursive = TRUE, showWarnings = FALSE)
-
 nishida_concentration_gamma_fit <- brm(
   formula = concentration_formula,
   data = nishida_concentration_data,
@@ -195,7 +187,7 @@ nishida_concentration_gamma_fit <- brm(
   cores = 4,
   seed = 1061,
   control = list(adapt_delta = 0.99, max_treedepth = 12),
-  file = here("results", "module_01_initial_contamination", "nishida_concentration_gamma_fit"),
+  file = here("results", "module1_1_initial_contamination", "nishida_concentration_gamma_fit"),
   silent = 2,
   refresh = 0
 )
@@ -212,7 +204,7 @@ nishida_concentration_lognormal_fit <- brm(
   cores = 4,
   seed = 1063,
   control = list(adapt_delta = 0.99, max_treedepth = 12),
-  file = here("results", "module_01_initial_contamination", "nishida_concentration_lognormal_fit"),
+  file = here("results", "module1_1_initial_contamination", "nishida_concentration_lognormal_fit"),
   silent = 2,
   refresh = 0
 )
@@ -224,7 +216,7 @@ nishida_concentration_loo <- list(
 nishida_concentration_model_comparison <-
   loo::loo_compare(nishida_concentration_loo) %>%
   as.data.frame() %>%
-  as_tibble(rownames = "model") %>%
+  as_tibble() %>%
   select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
 
 nishida_concentration_fit <- nishida_concentration_gamma_fit
@@ -313,110 +305,156 @@ nishida_concentration_ppc_observed <- nishida_individual_gii_records %>%
   ) %>%
   pivot_longer(-study_id, names_to = "metric", values_to = "value")
 
-nishida_concentration_pp_check <- ggplot(
-  nishida_concentration_ppc_intervals,
-  aes(study_id, predicted)
-) +
-  geom_pointrange(aes(ymin = lower, ymax = upper), color = "#4E79A7") +
-  geom_point(
-    data = nishida_concentration_ppc_observed,
-    aes(y = value),
-    color = "#D55E00",
-    shape = 4,
-    size = 3
-  ) +
-  facet_wrap(~metric, scales = "free_y") +
-  scale_x_discrete(labels = c(
-    Nishida_2003 = "Nishida 2003",
-    Nishida_2007 = "Nishida 2007"
-  )) +
-  labs(
-    x = NULL,
-    y = NULL,
-    caption = "Blue: posterior-predictive median and 95% interval; orange ×: observed."
-  ) +
-  theme_minimal(base_size = 12)
+df_a_pred <- nishida_concentration_ppc_intervals %>% filter(metric == "Fraction <100")
+df_a_obs <- nishida_concentration_ppc_observed %>% filter(metric == "Fraction <100")
+p_a <- ggplot(df_a_pred, aes(study_id, predicted)) +
+  geom_pointrange(aes(ymin = lower, ymax = upper), color = "#4E79A7", linewidth = 1, size = 1) +
+  geom_point(data = df_a_obs, aes(y = value), color = "#D55E00", shape = 4, size = 4, stroke = 1.5) +
+  scale_x_discrete(labels = c(Nishida_2003 = "2003", Nishida_2007 = "2007")) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = "Year of publication", y = "Left-censored proportion (%)") +
+  theme_minimal(base_size = 14) + theme(panel.grid.minor = element_blank(), axis.title = element_text(face = "bold"))
 
+df_b_pred <- nishida_concentration_ppc_intervals %>% filter(metric == "Median quantified GC/oyster")
+df_b_obs <- nishida_concentration_ppc_observed %>% filter(metric == "Median quantified GC/oyster")
+p_b <- ggplot(df_b_pred, aes(study_id, predicted)) +
+  geom_pointrange(aes(ymin = lower, ymax = upper), color = "#4E79A7", linewidth = 1, size = 1) +
+  geom_point(data = df_b_obs, aes(y = value), color = "#D55E00", shape = 4, size = 4, stroke = 1.5) +
+  scale_x_discrete(labels = c(Nishida_2003 = "2003", Nishida_2007 = "2007")) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x = "Year of publication", y = "Median quantified concentration (GC/oyster)") +
+  theme_minimal(base_size = 14) + theme(panel.grid.minor = element_blank(), axis.title = element_text(face = "bold"))
+
+nishida_concentration_pp_check <- p_a + p_b + plot_annotation(tag_levels = "A")
 nishida_concentration_pp_check
 ggsave(
-  here("figures", "module1_positive_concentration_ppc.png"),
+  here("figures", "module1_1_positive_concentration_ppc.tiff"),
   nishida_concentration_pp_check,
-  width = 8,
-  height = 4,
-  dpi = 300
-)
-ggsave(
-  here("figures", "module1_positive_concentration_ppc.tiff"),
-  nishida_concentration_pp_check,
-  width = 8,
-  height = 4,
-  dpi = 300,
+  width = 10,
+  height = 5,
+  dpi = 600,
   compression = "lzw"
 )
 ```
 
 
-# Module 2: Process Characterization (Thermal Inactivation)
+## 1.2 Thermal Process Modeling
 
 ## Purpose
 
-Module 2 supplies posterior uncertainty in thermal survival $S(U)$ for each cooking
-condition using the Dynamic Geeraerd model. Pre-cook contamination and serving
-variability are not applied here; they are generated in Module 3.
+Section 1.2 supplies posterior uncertainty in thermal survival $S(U)$ for each cooking
+condition using the Geeraerd model. Pre-cook contamination and serving
+variability are not applied here; they are generated in Section 1.3.
 
-## Dynamic Geeraerd Module Input
+## Geeraerd Module Input
 
 ```{r}
-source(here("scripts", "module2_thermal_functions.R"))
-# Primary Baseline Model: Dynamic Geeraerd model (includes 100 °C data)
+source(here("scripts", "module1_2_thermal_functions.R"))
+# Primary Baseline Model: Geeraerd model (includes 100 °C data)
 geeraerd_post <- readRDS(
-  here("results", "module_02_thermal_inactivation", "module_02_geeraerd_thermal_kinetics_posterior.rds")
+  here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds")
 )
 
 # Sensitivity Analysis Scenario Model: Bayesian Meta-Analysis (Shellfish infectivity kinetics posterior)
 df_meta_shellfish <- readRDS(
-  here("results", "module_02_thermal_inactivation", "module_02_meta_analysis_thermal_kinetics_posterior.rds")
+  here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds")
 )
 
 df_comeup_updated <- readRDS(
-  here("data", "module_02_thermal_inactivation", "df_comeup_updated.rds")
+  here("data", "module1_2_thermal_inactivation", "df_comeup_updated.rds")
 )
 
 # Standard cooking scenario time grid (0 to 16 minutes, every 2 min, covering full sensitivity tail)
-module3_cooking_time_grid <- seq(0, 16, by = 2)
+module2_cooking_time_grid <- seq(0, 16, by = 2)
 
 steam_excel_path <- here("data", "experimental_temperature_profiles", "Steaming small Cumulative.xlsx")
-bake_excel_path  <- here("data", "experimental_temperature_profiles", "Real Oyster Baking cumulative.xlsx")
+bake_excel_path <- here("data", "experimental_temperature_profiles", "Real Oyster Baking cumulative.xlsx")
+```
 
-# 1. Primary Baseline Model (Dynamic Geeraerd) - Steaming & Baking across Small, Medium, Large
-module3_cooking_scenarios_geeraerd <- run_module3_cooking_method_size_scenarios(
+```{r module2-temperature-profiles-plot}
+# Plot internal core temperature profiles
+plot_temperature_profiles <- function(steam_path, bake_path) {
+  # Extract the profiles using the helper function in module1_2_thermal_functions.R
+  steam_S <- extract_cooking_profile_min(steam_path, "Small Cumulative", "steaming", "small")
+  steam_M <- extract_cooking_profile_min(steam_path, "Medium Cumulative", "steaming", "medium")
+  steam_L <- extract_cooking_profile_min(steam_path, "Large Cumulative", "steaming", "large")
+
+  bake_S  <- extract_cooking_profile_min(bake_path, "Small cuml", "baking", "small")
+  bake_M  <- extract_cooking_profile_min(bake_path, "Medium cuml", "baking", "medium")
+  bake_L  <- extract_cooking_profile_min(bake_path, "Large cuml", "baking", "large")
+
+  all_profiles <- bind_rows(steam_S, steam_M, steam_L, bake_S, bake_M, bake_L) %>%
+    mutate(
+      size_label = factor(str_to_title(size), levels = c("Small", "Medium", "Large")),
+      method_label = str_to_title(method)
+    )
+
+  p <- ggplot(all_profiles, aes(x = time, y = temperature, color = size_label, fill = size_label)) +
+    geom_ribbon(aes(ymin = temp_min, ymax = temp_max), alpha = 0.4, color = NA) +
+    geom_line(linewidth = 1.2) +
+    facet_wrap(~method_label, scales = "free_x") +
+    scale_x_continuous(breaks = seq(0, 16, by = 2)) +
+    scale_color_brewer(palette = "Dark2") +
+    scale_fill_brewer(palette = "Dark2") +
+    theme_bw(base_size = 14) +
+    theme(
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold"),
+      axis.title = element_text(face = "bold"),
+      strip.background = element_rect(fill = "#EAEDED"),
+      strip.text = element_text(face = "bold", size = 12),
+      panel.grid.minor = element_blank()
+    ) +
+    labs(
+      x = "Cooking time (min)",
+      y = "Internal temperature (°C)",
+      color = "Oyster size",
+      fill = "Oyster size"
+    )
+  
+  p
+}
+
+p_temp <- plot_temperature_profiles(steam_excel_path, bake_excel_path)
+p_temp
+ggsave(plot = p_temp, filename = here("figures", "module1_2_temperature_profiles.tiff"), width = 10, height = 5)
+```
+
+```{r module2-cooking-scenarios, eval=FALSE}
+# 1. Primary Baseline Model (Geeraerd) - Steaming & Baking across Small, Medium, Large
+  module2_cooking_scenarios_geeraerd <- run_module2_cooking_method_size_scenarios(
   post_draws = geeraerd_post,
   steam_path = steam_excel_path,
   bake_path = bake_excel_path,
   model_type = "geeraerd",
-  times_min = module3_cooking_time_grid,
+  times_min = module2_cooking_time_grid,
   n_unc = n_uncertainty
 )
-saveRDS(module3_cooking_scenarios_geeraerd, here("results", "module_02_thermal_inactivation", "module_02_cooking_scenarios_geeraerd.rds"))
+saveRDS(module2_cooking_scenarios_geeraerd, here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_geeraerd.rds"))
 
-# 2. Sensitivity Analysis Model (Mafart / Meta-Analysis) - Steaming & Baking across Small, Medium, Large
-module3_cooking_scenarios_meta <- run_module3_cooking_method_size_scenarios(
+# 2. Sensitivity Model (Mafart / Meta-Analysis) - Steaming & Baking across Small, Medium, Large
+  module2_cooking_scenarios_meta <- run_module2_cooking_method_size_scenarios(
   post_draws = df_meta_shellfish,
   steam_path = steam_excel_path,
   bake_path = bake_excel_path,
   model_type = "mafart",
-  times_min = module3_cooking_time_grid,
+  times_min = module2_cooking_time_grid,
   n_unc = n_uncertainty
 )
-saveRDS(module3_cooking_scenarios_meta, here("results", "module_02_thermal_inactivation", "module_02_cooking_scenarios_meta.rds"))
+saveRDS(module2_cooking_scenarios_meta, here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_meta.rds"))
 
-survival_fraction_table_geeraerd <- module3_cooking_scenarios_geeraerd$survival_data
-survival_fraction_table_meta <- module3_cooking_scenarios_meta$survival_data
+survival_fraction_table_geeraerd <- module2_cooking_scenarios_geeraerd$survival_data
+survival_fraction_table_meta <- module2_cooking_scenarios_meta$survival_data
+module2_cooking_scenarios_geeraerd <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_geeraerd.rds"))
+survival_fraction_table_geeraerd <- module2_cooking_scenarios_geeraerd$survival_data
 
-# Convert survival fraction tables into 2D mc2d uncertainty nodes (type = "U", ndunc = 500)
-convert_survival_to_mc2d_nodes <- function(survival_df, n_unc = 1000) {
+module2_cooking_scenarios_meta <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_meta.rds"))
+survival_fraction_table_meta <- module2_cooking_scenarios_meta$survival_data
+
+# Convert survival fraction tables into 2D mc2d uncertainty nodes (type = "U", ndunc = 2000)
+convert_survival_to_mc2d_nodes <- function(survival_df, n_unc = 2000) {
   ndunc(n_unc)
-  scenarios <- survival_df %>% dplyr::distinct(method, size, time_min)
+  scenarios <- survival_df %>% distinct(method, size, time_min)
   
   node_list <- list()
   for (i in seq_len(nrow(scenarios))) {
@@ -438,23 +476,34 @@ convert_survival_to_mc2d_nodes <- function(survival_df, n_unc = 1000) {
 mc2d_survival_nodes_geeraerd <- convert_survival_to_mc2d_nodes(survival_fraction_table_geeraerd, n_unc = n_uncertainty)
 mc2d_survival_nodes_meta <- convert_survival_to_mc2d_nodes(survival_fraction_table_meta, n_unc = n_uncertainty)
 
-write_csv(module3_cooking_scenarios_geeraerd$summary_table, here("results", "module_02_thermal_inactivation", "module_02_thermal_survival_summary_geeraerd.csv"))
-write_csv(module3_cooking_scenarios_meta$summary_table, here("results", "module_02_thermal_inactivation", "module_02_thermal_survival_summary_meta.csv"))
-```
+  # To generate plots without re-running the heavy simulations, load the raw iteration data from RDS:
+  module2_cooking_scenarios_geeraerd <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_geeraerd.rds"))
+  survival_fraction_table_geeraerd <- module2_cooking_scenarios_geeraerd$survival_data
+  
+  module2_cooking_scenarios_meta <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_meta.rds"))
+  survival_fraction_table_meta <- module2_cooking_scenarios_meta$survival_data
 
-# Module 3: Exposure Assessment
+p_surv_g <- plot_survival_ratio(survival_fraction_table_geeraerd)
+p_surv_g
+ggsave(plot = p_surv_g, filename = here("figures", "module1_2_hunov_survival_ratio_bars_geeraerd.tiff"), width = 10, height = 5)
+
+p_surv_m <- plot_survival_ratio(survival_fraction_table_meta)
+p_surv_m
+ggsave(plot = p_surv_m, filename = here("figures", "module1_2_hunov_survival_ratio_bars_meta_analysis.tiff"), width = 10, height = 5)
+```
+## 1.3 Exposure Dose Calculation
 
 ## Purpose
 
-Module 3 combines the pre-harvest initial contamination $GC_{\text{precook}}(V, U)$ with the size-stratified thermal survival nodes $S(U)$ from Module 2. 
+Section 1.3 combines the pre-harvest initial contamination $GC_{\text{precook}}(V, U)$ with the size-stratified thermal survival nodes $S(U)$ from Section 1.2. 
 
 In strict adherence to QMRA principles, **Initial contamination is sampled independently from oyster size**, establishing the baseline population-average exposure. The physical variation of oyster size (**Small, Medium, Large**) operates directly through the size-stratified thermal inactivation kinetics $S_{\text{size}}(U)$ for both **Steaming** and **Baking** scenarios.
 
-Module 3 produces 2D per-oyster post-cook residual dose matrices $GC_{\text{postcook, size}}(V, U)$ (in Genome Copies / Infectious Units per oyster). Serving aggregation (6 and 12 oysters) and post-hoc random permutation size mixing are evaluated downstream in Module 4.
+Section 1.3 produces 2D per-oyster post-cook residual dose matrices $GC_{\text{postcook, size}}(V, U)$ (in Genome Copies / Infectious Units per oyster). Serving aggregation (6 and 12 oysters) and post-hoc random permutation size mixing are evaluated downstream in Module 2.
 
 ## Individual Oyster Pre-Cook & Post-Cook Dose Generation
 
-```{r}
+```{r, eval=FALSE}
 # Read Global Pooled Prevalence mc2d Uncertainty Node (type = "U", dimension: 2000)
 prevalence_selected_u <- c(mc2d_prevalence_node)
 
@@ -469,8 +518,9 @@ concentration_selected <- nishida_concentration_posterior[
 # 2.5% to 97.5% log10 GC:PFU coverage is [3.39, 4.22] (linear: [2455, 16596]), median is 3.7 log10 (~5012:1).
 infectious_dose_precook_matrix <- matrix(0, nrow = n_variability, ncol = n_uncertainty)
 
-log10_q_inv_min <- 3.39 # log10(2455), 2.5th percentile lower bound from Mirmahdi et al. (2025)
-log10_q_inv_max <- 4.22 # log10(16596), 97.5th percentile upper bound from Mirmahdi et al. (2025)
+log10_q_inv_min <- 3.39
+log10_q_inv_max <- 4.22 
+set.seed(2026)
 q_inv_u <- 10^runif(n_uncertainty, min = log10_q_inv_min, max = log10_q_inv_max)
 q_u <- 1 / q_inv_u
 
@@ -489,32 +539,64 @@ for (u in seq_len(n_uncertainty)) {
 }
 
 infectious_dose_precook_node <- mcdata(infectious_dose_precook_matrix, type = "VU")
-saveRDS(infectious_dose_precook_node, here("results", "module_03_exposure_assessment", "infectious_dose_precook_node.rds"))
+saveRDS(infectious_dose_precook_node, here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
 
 # Calculate per-oyster post-cook residual doses across cooking scenarios and size classes
 calculate_per_oyster_postcook_node <- function(precook_node, survival_node) {
   precook_node * survival_node
 }
 
-# 1. Primary Baseline Model (Dynamic Geeraerd) - Per-oyster residual dose nodes
-mc2d_postcook_nodes_geeraerd <- map(mc2d_survival_nodes_geeraerd, function(s_node) {
+  # Load survival iteration data from RDS to generate nodes without running simulations
+  module2_cooking_scenarios_geeraerd <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_geeraerd.rds"))
+  survival_fraction_table_geeraerd <- module2_cooking_scenarios_geeraerd$survival_data
+  
+  module2_cooking_scenarios_meta <- readRDS(here("results", "module1_2_thermal_inactivation", "module1_2_cooking_scenarios_meta.rds"))
+  survival_fraction_table_meta <- module2_cooking_scenarios_meta$survival_data
+
+  # Convert survival fraction tables into 2D mc2d uncertainty nodes (type = "U", ndunc = 2000)
+  convert_survival_to_mc2d_nodes <- function(survival_df, n_unc = 2000) {
+    ndunc(n_unc)
+    scenarios <- survival_df %>% distinct(method, size, time_min)
+    
+    node_list <- list()
+    for (i in seq_len(nrow(scenarios))) {
+      m <- scenarios$method[i]
+      sz <- scenarios$size[i]
+      t_val <- scenarios$time_min[i]
+      
+      vec_S <- survival_df %>%
+        filter(method == m, size == sz, time_min == t_val) %>%
+        arrange(uncertainty_iteration) %>%
+        pull(survival_fraction)
+      
+      node_key <- paste(m, sz, paste0(t_val, "min"), sep = "_")
+      node_list[[node_key]] <- mcdata(vec_S, type = "U")
+    }
+    node_list
+  }
+  
+  mc2d_survival_nodes_geeraerd <- convert_survival_to_mc2d_nodes(survival_fraction_table_geeraerd, n_unc = n_uncertainty)
+  mc2d_survival_nodes_meta <- convert_survival_to_mc2d_nodes(survival_fraction_table_meta, n_unc = n_uncertainty)
+
+# 1. Primary Baseline Model (Geeraerd) - Per-oyster residual dose nodes
+  mc2d_postcook_nodes_geeraerd <- map(mc2d_survival_nodes_geeraerd, function(s_node) {
   calculate_per_oyster_postcook_node(infectious_dose_precook_node, s_node)
 })
-saveRDS(mc2d_postcook_nodes_geeraerd, here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_geeraerd.rds"))
+saveRDS(mc2d_postcook_nodes_geeraerd, here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_geeraerd.rds"))
 
 # 2. Sensitivity Model (Mafart / Meta-Analysis) - Per-oyster residual dose nodes
-mc2d_postcook_nodes_meta <- map(mc2d_survival_nodes_meta, function(s_node) {
+  mc2d_postcook_nodes_meta <- map(mc2d_survival_nodes_meta, function(s_node) {
   calculate_per_oyster_postcook_node(infectious_dose_precook_node, s_node)
 })
-saveRDS(mc2d_postcook_nodes_meta, here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_meta.rds"))
+saveRDS(mc2d_postcook_nodes_meta, here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_meta.rds"))
 
-# Scenario Condition Grid for Module 4 risk iteration
+# Scenario Condition Grid for Module 2 risk iteration
 condition_grid <- survival_fraction_table_geeraerd %>%
   distinct(method, size, time_min) %>%
   arrange(method, size, time_min)
-saveRDS(condition_grid, here("results", "module_03_exposure_assessment", "condition_grid.rds"))
+saveRDS(condition_grid, here("results", "module1_3_exposure_dose_calculation", "condition_grid.rds"))
 
-# Export Module 3 Pre-Cook & Post-Cook Exposure Assessment Summaries
+# Export Section 1.3 Pre-Cook & Post-Cook Exposure Assessment Summaries
 precook_dose_summary <- tibble(
   metric = c("Mean Precook Dose (Virions/oyster)", "Median Precook Dose", "P95 Precook Dose", "P99 Precook Dose"),
   value = c(
@@ -524,7 +606,7 @@ precook_dose_summary <- tibble(
     quantile(infectious_dose_precook_matrix, 0.99)
   )
 )
-write_csv(precook_dose_summary, here("results", "module_03_exposure_assessment", "module_03_per_oyster_precook_exposure_summary.csv"))
+write_csv(precook_dose_summary, here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_precook_exposure_summary.csv"))
 
 # Per-oyster Post-Cook Exposure Summaries across all cooking conditions
 summarize_postcook_dose_nodes <- function(postcook_nodes) {
@@ -549,20 +631,32 @@ summarize_postcook_dose_nodes <- function(postcook_nodes) {
 }
 
 postcook_exposure_summary_geeraerd <- summarize_postcook_dose_nodes(mc2d_postcook_nodes_geeraerd)
-postcook_exposure_summary_meta     <- summarize_postcook_dose_nodes(mc2d_postcook_nodes_meta)
-
-write_csv(postcook_exposure_summary_geeraerd, here("results", "module_03_exposure_assessment", "module_03_per_oyster_postcook_exposure_summary_geeraerd.csv"))
-write_csv(postcook_exposure_summary_meta, here("results", "module_03_exposure_assessment", "module_03_per_oyster_postcook_exposure_summary_meta.csv"))
+postcook_exposure_summary_meta <- summarize_postcook_dose_nodes(mc2d_postcook_nodes_meta)
+write_csv(postcook_exposure_summary_geeraerd, here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_postcook_exposure_summary_geeraerd.csv"))
+write_csv(postcook_exposure_summary_meta, here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_postcook_exposure_summary_meta.csv"))
 ```
 
+## Exposure Assessment Summary Tables
+```{r module1-display-exposure-summary}
+# Display Pre-Cook and Post-Cook dose summaries for the rendered document
+read_csv(here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_precook_exposure_summary.csv"), show_col_types = FALSE) %>%
+  knitr::kable(caption = "Pre-Cook Virions per Oyster")
 
-# Module 4: Hazard & Risk Characterization
+read_csv(here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_postcook_exposure_summary_geeraerd.csv"), show_col_types = FALSE) %>%
+
+  knitr::kable(caption = "Post-Cook Virions per Oyster (Geeraerd Baseline)")
+
+read_csv(here("results", "module1_3_exposure_dose_calculation", "module1_3_per_oyster_postcook_exposure_summary_meta.csv"), show_col_types = FALSE) %>%
+  knitr::kable(caption = "Post-Cook Virions per Oyster (Meta-Analysis)")
+```
+
+# Module 2 & 3: Hazard & Risk Characterization
 
 ## Purpose
 
-Module 4 receives the 2D per-oyster exposure dose matrices from Module 3, constructs 6-oyster and 12-oyster mixed servings (with post-hoc size mixing across Small, Medium, and Large oysters), and evaluates infection and illness risk per serving.
+Module 2 receives the 2D per-oyster exposure dose matrices from Section 1.3, constructs 6-oyster and 12-oyster mixed servings (with post-hoc size mixing across Small, Medium, and Large oysters), and evaluates infection and illness risk per serving.
 
-Dose-response risk is evaluated using the **Teunis et al. (2020)** Kummer hypergeometric dose-response model ($1F1$) parameterized for Norovirus GII ($Se^+$):
+Dose-response risk is evaluated using the **Teunis et al. (2020)** Kummer hypergeometric dose-response model ($1F1$) parameterized for HuNoV GII ($Se^+$):
 
 $$P_{\text{inf}}(D \mid Se^+) = 1 - {}_1F_1(\alpha, \alpha + \beta, -D)$$
 $$P_{\text{ill|inf}}(D \mid Se^+) = 1 - (1 + D / \eta)^{-\rho}$$
@@ -571,26 +665,23 @@ Host susceptibility is represented by a Beta distribution fitted to Messner et a
 
 $$P(Se^+) \sim \operatorname{Beta}(\alpha_{\text{se}}, \beta_{\text{se}})$$
 
-## Risk Characterization & Model Sensitivity Analysis
-
-Module 4 evaluates infection and illness risk per serving using the **Teunis et al. (2020)** Kummer hypergeometric dose-response model ($1F1$) and Messner et al. (2014) host secretor susceptibility $P(Se^+)$.
-
 Risk is evaluated for both:
-1. **Baseline Primary Model**: Dynamic Geeraerd model (fitted with 100°C experimental data).
+1. **Baseline Primary Model**: Geeraerd model (fitted with 100°C experimental data).
 2. **Sensitivity Analysis Model**: Systematic Review Bayesian Meta-Analysis model (Mafart model with shellfish parameters $D_{60} = 4.30\text{ min}, z = 30.10^\circ\text{C}, \beta = 0.39$).
 
-```{r module4-teunis-risk-evaluation}
-source(here("scripts", "module4_risk_characterization_functions.R"))
+## Risk Evaluation per Serving
+```{r module2-teunis-risk-evaluation, eval=FALSE}
+source(here("scripts", "module3_risk_characterization_functions.R"))
 
-infectious_dose_precook_node <- readRDS(here("results", "module_03_exposure_assessment", "infectious_dose_precook_node.rds"))
-mc2d_postcook_nodes_geeraerd <- readRDS(here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_geeraerd.rds"))
-mc2d_postcook_nodes_meta     <- readRDS(here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_meta.rds"))
-condition_grid <- readRDS(here("results", "module_03_exposure_assessment", "condition_grid.rds"))
+infectious_dose_precook_node <- readRDS(here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
+mc2d_postcook_nodes_geeraerd <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_geeraerd.rds"))
+mc2d_postcook_nodes_meta  <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_meta.rds"))
+condition_grid <- readRDS(here("results", "module1_3_exposure_dose_calculation", "condition_grid.rds"))
 
-geeraerd_summary_rds <- here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.rds")
-meta_summary_rds     <- here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.rds")
+geeraerd_summary_rds <- here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.rds")
+meta_summary_rds <- here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.rds")
 
-# 1. Evaluate Baseline Model Risk (Dynamic Geeraerd)
+# 1. Evaluate Baseline Model Risk (Geeraerd)
 module4_output_summary_geeraerd <- evaluate_model_risk_summary(
   postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
   condition_grid = condition_grid,
@@ -598,13 +689,7 @@ module4_output_summary_geeraerd <- evaluate_model_risk_summary(
   n_unc = n_uncertainty
 )
 saveRDS(module4_output_summary_geeraerd, geeraerd_summary_rds)
-write_csv(module4_output_summary_geeraerd, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.csv"))
-
-# Generate Baseline Risk Heatmap
-plot_module4_risk_heatmap(
-  summary_df = module4_output_summary_geeraerd,
-  output_filepath = here("figures", "module4_illness_heatmap_geeraerd.png")
-)
+write_csv(module4_output_summary_geeraerd, here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.csv"))
 
 # 2. Evaluate Sensitivity Analysis Model Risk (Systematic Review Meta-Analysis / Mafart)
 module4_output_summary_meta <- evaluate_model_risk_summary(
@@ -614,95 +699,46 @@ module4_output_summary_meta <- evaluate_model_risk_summary(
   n_unc = n_uncertainty
 )
 saveRDS(module4_output_summary_meta, meta_summary_rds)
-write_csv(module4_output_summary_meta, here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.csv"))
+write_csv(module4_output_summary_meta, here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.csv"))
+```
+
+## Per-Serving Risk
+
+```{r module3-risk-heatmap}
+source(here("scripts", "module3_risk_characterization_functions.R"))
+
+module4_output_summary_geeraerd <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.rds"))
+module4_output_summary_meta <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.rds"))
+
+# Display Risk Summaries for the rendered document
+module4_output_summary_geeraerd %>%
+  select(method, size, time_min, serving_size, mean_p_illness, p025_p_illness, p975_p_illness) %>%
+
+  knitr::kable(caption = "Serving Risk Summary (Geeraerd Baseline)")
+
+module4_output_summary_meta %>%
+  select(method, size, time_min, serving_size, mean_p_illness, p025_p_illness, p975_p_illness) %>%
+  knitr::kable(caption = "Serving Risk Summary (Meta-Analysis)")
+
+# Generate Baseline Risk Heatmap
+plot_module4_risk_heatmap(
+  summary_df = module4_output_summary_geeraerd,
+  output_filepath = here("figures", "module3_illness_heatmap_geeraerd.tiff")
+)
 
 # Generate Sensitivity Risk Heatmap
 plot_module4_risk_heatmap(
   summary_df = module4_output_summary_meta,
-  output_filepath = here("figures", "module4_illness_heatmap_meta_analysis.png")
+  output_filepath = here("figures", "module3_illness_heatmap_meta_analysis.tiff")
 )
-
-# 3. Generate Global Parameter Sensitivity Analysis (Spearman Tornado Plot)
-plot_tornado_sensitivity(
-  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness.png")
-)
-```
-
-## Simulation Numerical Convergence Assessment
-
-Prior to interpreting risk characterization results, numerical convergence was verified across both **Variability ($N_{\text{variability}} = 10,000$)** and **Uncertainty ($N_{\text{uncertainty}} = 2,000$)** dimensions to ensure stability of population risk estimates.
-
-```{r module4-simulation-convergence-assessment}
-infectious_dose_precook_node <- readRDS(here("results", "module_03_exposure_assessment", "infectious_dose_precook_node.rds"))
-
-# Assess numerical stability of Mean P(illness) across N_var and N_unc
-conv_res <- assess_simulation_convergence(
-  precook_node = infectious_dose_precook_node,
-  sizes_var = c(500, 1000, 2500, 5000, 10000),
-  sizes_unc = c(50, 100, 250, 500, 1000, 1500, 2000)
-)
-
-# Export Convergence Data
-write_csv(conv_res, here("results", "module_04_risk_characterization", "module4_numerical_convergence_data.csv"))
-
-# Plot Convergence Curves
-plot_simulation_convergence(conv_res, here("figures", "module4_numerical_convergence_plot.png"))
-
-conv_res
-```
-
-## Regional Sensitivity Analysis: Monte Carlo Filtering (MCF)
-
-Monte Carlo Filtering (MCF) partitions simulation iterations into two distinct groups based on the **safety cutoff threshold ($P_{\text{illness}} = 10^{-4}$, 0.01% per serving)**:
-1. **Unsafe Group ($B$)**: Iterations where illness risk $P_{\text{illness}} \ge 10^{-4}$ (High-Risk / Outbreak Conditions).
-2. **Safe Group ($\bar{B}$)**: Iterations where illness risk $P_{\text{illness}} < 10^{-4}$ (FDA/QMRA Benchmark Compliant).
-
-Note: Under updated infectivity parameters ($Q \sim 2455 - 16596$), raw oyster baseline risk is $\approx 3.8 \times 10^{-4}$. Therefore, setting cutoff $= 10^{-4}$ provides a responsive cutoff that properly categorizes raw and undercooked oysters as high-risk ($P \ge 10^{-4}$).
-
-Two-sample Kolmogorov-Smirnov (KS) tests quantify parameter sensitivity to identify critical drivers of exceeding the safety threshold ($P_{\text{illness}} \ge 10^{-4}$).
-
-```{r module4-monte-carlo-filtering}
-mc2d_postcook_nodes_geeraerd <- readRDS(here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_geeraerd.rds"))
-mc2d_postcook_nodes_meta     <- readRDS(here("results", "module_03_exposure_assessment", "mc2d_postcook_nodes_meta.rds"))
-
-# Run Monte Carlo Filtering for Representative Baseline Scenario (Steaming Medium 4 min)
-mcf_result <- run_monte_carlo_filtering(
-  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  cutoff = 0.0001
-)
-
-# Export KS Test Results
-write_csv(mcf_result$ks_table, here("results", "module_04_risk_characterization", "module4_mcf_ks_test_results.csv"))
-
-# Plot Empirical CDF Comparison Curves for Top Critical Parameter
-plot_mcf_cdf_curves(mcf_result, here("figures", "module4_mcf_cdf_top_parameter.png"))
-
-# 1. Run Monte Carlo Filtering Loop across all scenarios - Primary Baseline Model (Geeraerd)
-mcf_matrix_geeraerd <- run_mcf_scenario_matrix(
-  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
-  cutoff = 0.0001
-)
-write_csv(mcf_matrix_geeraerd, here("results", "module_04_risk_characterization", "module4_mcf_scenario_safety_matrix.csv"))
-write_csv(mcf_matrix_geeraerd, here("results", "module_04_risk_characterization", "module4_mcf_scenario_safety_matrix_geeraerd.csv"))
-
-# 2. Run Monte Carlo Filtering Loop across all scenarios - Sensitivity Model (Meta-Analysis)
-mcf_matrix_meta <- run_mcf_scenario_matrix(
-  postcook_nodes_list = mc2d_postcook_nodes_meta,
-  cutoff = 0.0001
-)
-write_csv(mcf_matrix_meta, here("results", "module_04_risk_characterization", "module4_mcf_scenario_safety_matrix_meta.csv"))
-
-mcf_matrix_geeraerd
 ```
 
 ## U.S. Annual Illness Burden from FoodNet Oyster Consumption
 
-```{r module4-us-annual-illness-burden}
-infectious_dose_precook_node <- readRDS(here("results", "module_03_exposure_assessment", "infectious_dose_precook_node.rds"))
-module4_output_summary_geeraerd <- readRDS(here("results", "module_04_risk_characterization", "module4_serving_risk_summary_geeraerd.rds"))
-module4_output_summary_meta <- readRDS(here("results", "module_04_risk_characterization", "module4_serving_risk_summary_meta.rds"))
-
+```{r module4-us-annual-illness-burden, eval=FALSE}
+infectious_dose_precook_node <- readRDS(here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
+module4_output_summary_geeraerd <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.rds"))
+module4_output_summary_meta <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.rds"))
 # 1. Primary Baseline Model (Geeraerd Baseline)
 illness_burden_res_geeraerd <- calculate_us_illness_burden(
   precook_node = infectious_dose_precook_node,
@@ -711,14 +747,14 @@ illness_burden_res_geeraerd <- calculate_us_illness_burden(
   n_var = n_variability,
   n_unc = n_uncertainty
 )
-saveRDS(illness_burden_res_geeraerd, here("results", "module_04_risk_characterization", "illness_burden_res_geeraerd.rds"))
+saveRDS(illness_burden_res_geeraerd, here("results", "module3_risk_characterization", "illness_burden_res_geeraerd.rds"))
 write_csv(
   illness_burden_res_geeraerd$full_summary,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary.csv")
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_summary.csv")
 )
 write_csv(
   illness_burden_res_geeraerd$manuscript_table,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table.csv")
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_manuscript_table.csv")
 )
 
 # 2. Sensitivity Analysis Model (Meta-Analysis / Mafart Model)
@@ -729,19 +765,166 @@ illness_burden_res_meta <- calculate_us_illness_burden(
   n_var = n_variability,
   n_unc = n_uncertainty
 )
-saveRDS(illness_burden_res_meta, here("results", "module_04_risk_characterization", "illness_burden_res_meta.rds"))
+saveRDS(illness_burden_res_meta, here("results", "module3_risk_characterization", "illness_burden_res_meta.rds"))
 write_csv(
   illness_burden_res_meta$full_summary,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_summary_meta.csv")
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_summary_meta.csv")
 )
 write_csv(
   illness_burden_res_meta$manuscript_table,
-  here("results", "module_04_risk_characterization", "module4_us_annual_illness_manuscript_table_meta.csv")
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_manuscript_table_meta.csv")
+)
+```
+
+```{r module4-display-annual-illness-summary}
+# Display Annual U.S. Illness Burden summary tables for the rendered document
+read_csv(here("results", "module3_risk_characterization", "module3_us_annual_illness_manuscript_table.csv"), show_col_types = FALSE) %>%
+  knitr::kable(caption = "U.S. Annual Illness Burden (Geeraerd Baseline)")
+
+read_csv(here("results", "module3_risk_characterization", "module3_us_annual_illness_manuscript_table_meta.csv"), show_col_types = FALSE) %>%
+  knitr::kable(caption = "U.S. Annual Illness Burden (Meta-Analysis)")
+```
+
+```{r module4-plot-annual-illness-burden}
+# Load annual illness summary datasets
+module4_us_annual_illness_summary <- read_csv(
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_summary.csv"),
+  show_col_types = FALSE
+)
+module4_us_annual_illness_summary_meta <- read_csv(
+  here("results", "module3_risk_characterization", "module3_us_annual_illness_summary_meta.csv"),
+  show_col_types = FALSE
 )
 
-illness_burden_res_geeraerd$manuscript_table
-illness_burden_res_meta$manuscript_table
-```
+# Using 90% Credible Interval (5th-95th percentile) following CDC/FDA burden reporting conventions
+# Prepare plotting data: mixed size, commercial cooked oysters, and raw oyster baseline
+plot_annual_illness_burden <- function(summary_df) {
+  df_raw <- summary_df %>% filter(method == "raw")
+  
+  df_bake <- summary_df %>% filter(method == "baking", size == "mixed", time_min > 0) %>%
+    bind_rows(df_raw %>% mutate(method = "baking"))
+    
+  df_steam <- summary_df %>% filter(method == "steaming", size == "mixed", time_min > 0) %>%
+    bind_rows(df_raw %>% mutate(method = "steaming"))
+    
+  df_plot <- bind_rows(df_bake, df_steam) %>%
+    mutate(
+      serving_size_label = paste(serving_size, "oysters"),
+      cooking_time_label = ifelse(time_min == 0, "0 (Raw)", as.character(time_min)),
+      method_label = str_to_title(method)
+    )
+    
+  # Order the factors
+  df_plot$cooking_time_label <- factor(df_plot$cooking_time_label, levels = c("0 (Raw)", "2", "4", "6", "8", "10", "12", "14", "16"))
+  df_plot$method_label <- factor(df_plot$method_label, levels = c("Baking", "Steaming"))
+  df_plot$serving_size_label <- factor(df_plot$serving_size_label, levels = c("6 oysters", "12 oysters"))
+  
+  ggplot(df_plot, aes(x = cooking_time_label, y = expected_annual_us_illnesses, fill = serving_size_label)) +
+    geom_col(position = position_dodge(width = 0.8), width = 0.7, color = "black") +
+    facet_wrap(~method_label, scales = "free_x") +
+    scale_y_continuous(labels = scales::comma) +
+    scale_fill_manual(values = c("6 oysters" = "#2C3E50", "12 oysters" = "#D55E00")) +
+    theme_bw() +
+    theme(
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold"),
+      axis.title = element_text(face = "bold"),
+      strip.background = element_rect(fill = "#EAECEE"),
+      strip.text = element_text(face = "bold", size = 12),
+      panel.grid.minor = element_blank()
+    ) +
+    labs(
+      x = "Cooking holding time (minutes)",
+      y = "Expected Annual U.S. HuNoV Illnesses",
+      fill = "Serving size"
+    )
+}
+
+# 1. Primary Geeraerd Plot
+p_annual_geeraerd <- plot_annual_illness_burden(module4_us_annual_illness_summary)
+ggsave(plot = p_annual_geeraerd, filename = here("figures", "module3_annual_illness_bars_geeraerd.tiff"), width = 10, height = 6)
+
+# 2. Sensitivity Meta-Analysis (Mafart Weibull) Plot
+p_annual_meta <- plot_annual_illness_burden(module4_us_annual_illness_summary_meta)
+ggsave(plot = p_annual_meta, filename = here("figures", "module3_annual_illness_bars_meta_analysis.tiff"), width = 10, height = 6)
+p_annual_geeraerd
+p_annual_meta
 ```
 
+# Module 4: Model Diagnostics and Sensitivity Analysis
 
+## Simulation Numerical Convergence Assessment
+
+```{r module5-simulation-convergence-assessment}
+infectious_dose_precook_node <- readRDS(here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds"))
+
+# Assess numerical stability of Mean P(illness) across N_var and N_unc
+conv_res <- assess_simulation_convergence(
+  precook_node = infectious_dose_precook_node,
+  sizes_var = c(500, 1000, 2500, 5000, 10000),
+  sizes_unc = c(50, 100, 250, 500, 1000, 1500, 2000)
+)
+
+# Export Convergence Data
+write_csv(conv_res, here("results", "module4_sensitivity_analysis", "module4_numerical_convergence_data.csv"))
+
+# Plot Convergence Curves
+plot_simulation_convergence(conv_res, here("figures", "module4_numerical_convergence_plot.tiff"))
+```
+
+## Uncertainty Parameter Sensitivity Analysis (Spearman Tornado Plot)
+
+Uncertainty sensitivity analysis was conducted using Spearman rank correlation coefficients ($\rho$) to evaluate the monotonic relationship between primitive uncertain model input parameters and uncertainty-level mean illness probability.
+
+```{r module5-sensitivity-tornado}
+mc2d_postcook_nodes_geeraerd <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_geeraerd.rds"))
+mc2d_postcook_nodes_meta  <- readRDS(here("results", "module1_3_exposure_dose_calculation", "mc2d_postcook_nodes_meta.rds"))
+
+# 1. Tornado Plot for Baseline Model (Geeraerd)
+plot_tornado_sensitivity(
+  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
+  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_geeraerd.tiff")
+)
+
+# 2. Tornado Plot for Sensitivity Model (Meta-Analysis)
+plot_tornado_sensitivity(
+  postcook_nodes_list = mc2d_postcook_nodes_meta,
+  output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_meta.tiff")
+)
+```
+
+## Regional Sensitivity Analysis: Monte Carlo Filtering (MCF)
+
+```{r module5-monte-carlo-filtering}
+# Run MCF for Geeraerd (Representative Scenario: Steaming Medium 4 min)
+mcf_result_geeraerd <- run_monte_carlo_filtering(
+  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
+  cutoff = 0.0001
+)
+write_csv(mcf_result_geeraerd$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_geeraerd.csv"))
+plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_parameter_geeraerd.tiff"))
+
+# Run MCF for Meta-Analysis (Representative Scenario: Steaming Medium 4 min)
+mcf_result_meta <- run_monte_carlo_filtering(
+  postcook_nodes_list = mc2d_postcook_nodes_meta,
+  cutoff = 0.0001
+)
+write_csv(mcf_result_meta$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_meta.csv"))
+plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parameter_meta.tiff"))
+```
+
+```{r module5-mcf-scenario-matrix}
+# 1. Run Monte Carlo Filtering Loop across all scenarios - Primary Baseline Model (Geeraerd)
+mcf_matrix_geeraerd <- run_mcf_scenario_matrix(
+  postcook_nodes_list = mc2d_postcook_nodes_geeraerd,
+  cutoff = 0.0001
+)
+write_csv(mcf_matrix_geeraerd, here("results", "module4_sensitivity_analysis", "module4_mcf_scenario_safety_matrix_geeraerd.csv"))
+
+# 2. Run Monte Carlo Filtering Loop across all scenarios - Sensitivity Model (Meta-Analysis)
+mcf_matrix_meta <- run_mcf_scenario_matrix(
+  postcook_nodes_list = mc2d_postcook_nodes_meta,
+  cutoff = 0.0001
+)
+write_csv(mcf_matrix_meta, here("results", "module4_sensitivity_analysis", "module4_mcf_scenario_safety_matrix_meta.csv"))
+```

@@ -7,7 +7,7 @@ library(here)
 
 project_root <- here::here()
 data_dir <- file.path(project_root, "data", "module_03_thermal_inactivation_oyster")
-output_dir <- file.path(project_root, "results", "module_03_thermal_inactivation_oyster")
+output_dir <- file.path(project_root, "results", "module1_2_thermal_inactivation")
 
 source(file.path(project_root, "scripts", "module2_thermal_functions.R"))
 
@@ -110,7 +110,7 @@ post_ge <- as.data.frame(fit_ge$pars) %>%
     N_min = 10^logNmin
   )
 
-saveRDS(post_ge, file.path(output_dir, "module3_geeraerd_posterior_draws.rds"))
+saveRDS(post_ge, file.path(output_dir, "module1_2_geeraerd_posterior_draws.rds"))
 
 # 7. Posterior model fit check: fitted Geeraerd curves over observed data
 geeraerd_fit_overlay <- make_geeraerd_observed_fit_overlay(

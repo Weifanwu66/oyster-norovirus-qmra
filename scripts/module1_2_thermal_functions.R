@@ -15,7 +15,7 @@ prepare_observed_dynamic_profiles <- function(d) {
     dplyr::select(cond_nominal, cond, rep, time, temperature, logN, dplyr::everything())
 }
 
-module3_geeraerd_to_bioinactivation_pars <- function(parameters) {
+module2_geeraerd_to_bioinactivation_pars <- function(parameters) {
   all_pars <- as.list(parameters)
   all_pars$N0 <- 10^all_pars$logN0
   all_pars$N_min <- 10^all_pars$logNmin
@@ -28,7 +28,7 @@ get_geeraerd_residuals <- function(p, this_data, known, times, this_temp) {
   pred <- bioinactivation::predict_inactivation(
     "Geeraerd",
     times,
-    module3_geeraerd_to_bioinactivation_pars(c(p, known)),
+    module2_geeraerd_to_bioinactivation_pars(c(p, known)),
     this_temp
   )$simulation %>%
     as.data.frame()
@@ -135,7 +135,7 @@ make_geeraerd_observed_fit_overlay <- function(
       pred <- bioinactivation::predict_inactivation(
         "Geeraerd",
         this_times,
-        module3_geeraerd_to_bioinactivation_pars(c(this_pars, known)),
+        module2_geeraerd_to_bioinactivation_pars(c(this_pars, known)),
         this_temp
       )$simulation %>%
         as.data.frame()
@@ -308,7 +308,7 @@ predict_mafart_dynamic_reduction <- function(
   )
 }
 
-make_module3_time_grid <- function(target_time_grid) {
+make_module2_time_grid <- function(target_time_grid) {
   target_time_grid %>%
     dplyr::transmute(
       target_temperature_C = as.numeric(.data$target_temperature_C),
@@ -319,7 +319,7 @@ make_module3_time_grid <- function(target_time_grid) {
     dplyr::arrange(.data$target_temperature_C, .data$time_min)
 }
 
-run_module3_thermal_inactivation <- function(
+run_module2_thermal_inactivation <- function(
     geeraerd_post,
     df_comeup,
     n_uncertainty,
@@ -327,7 +327,7 @@ run_module3_thermal_inactivation <- function(
     model_type = "geeraerd",
     known = list(temp_ref = 57, C_c0 = 1e-3)
 ) {
-  time_grid <- make_module3_time_grid(target_time_grid)
+  time_grid <- make_module2_time_grid(target_time_grid)
 
   theta_ge <- geeraerd_post %>%
     dplyr::slice_sample(n = n_uncertainty, replace = TRUE) %>%
@@ -475,25 +475,33 @@ extract_cooking_profile_min <- function(path, sheet_name, method, size) {
   times_sec <- df[[1]]
   if (is.character(times_sec)) times_sec <- as.numeric(times_sec)
 
-  num_df <- df %>% dplyr::select(where(is.numeric))
-  temps <- apply(num_df, 1, function(row) {
-    vals <- row[!is.na(row) & row > 0 & row < 108]
-    if (length(vals) == 0) return(NA)
-    mean(vals)
-  })
+  # Properly select ONLY the replicate columns (which are named '1', '2', '3', etc.)
+  rep_cols <- grep("^[0-9]+$", names(df), value = TRUE)
+  if (length(rep_cols) == 0) {
+    # Fallback if names are weird: just grab columns 4 to 9 which are usually the replicates
+    rep_cols <- names(df)[4:9]
+  }
+  num_df <- df %>% dplyr::select(dplyr::all_of(rep_cols))
+  
+  res <- t(apply(num_df, 1, function(row) {
+    vals <- row[!is.na(row) & row > 0]
+    if (length(vals) == 0) return(c(NA, NA, NA))
+    c(mean(vals), min(vals), max(vals))
+  }))
 
   tibble::tibble(
     method = method,
     size = size,
     time = times_sec / 60,
-    temperature = temps
+    temperature = res[, 1],
+    temp_min = res[, 2],
+    temp_max = res[, 3]
   ) %>%
     dplyr::filter(!is.na(time), !is.na(temperature)) %>%
     dplyr::distinct(time, .keep_all = TRUE) %>%
     dplyr::arrange(time)
 }
-
-run_module3_cooking_method_size_scenarios <- function(
+run_module2_cooking_method_size_scenarios <- function(
     post_draws,
     steam_path,
     bake_path,

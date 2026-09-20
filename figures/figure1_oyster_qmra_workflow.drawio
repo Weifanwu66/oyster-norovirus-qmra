@@ -1,0 +1,79 @@
+<mxfile host="Electron" agent="Codex" version="30.3.14">
+  <diagram id="oyster-qmra-workflow" name="Page-1">
+    <mxGraphModel dx="1120" dy="1230" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1120" pageHeight="1230" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- Main vertical spine: state and outcome nodes only -->
+        <mxCell id="state1" value="Baseline viral contamination&#xa;Prevalence and concentration&#xa;(genome copies per oyster)" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=17;fillColor=#EAF2FF;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="55" width="520" height="104" as="geometry"/>
+        </mxCell>
+        <mxCell id="state2" value="Pre-cook infectious dose&#xa;(infectious virus per oyster)" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fillColor=#EAF2FF;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="255" width="520" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="state3" value="Post-cook surviving dose&#xa;(infectious virus per oyster)" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fillColor=#EAF2FF;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="455" width="520" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="state4" value="Serving-level ingested dose&#xa;(infectious virus per serving)" style="rounded=0;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fillColor=#EAF2FF;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="655" width="520" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="state5" value="Individual risk per serving&#xa;Probability of infection and illness" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fillColor=#EDF7ED;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="855" width="520" height="82" as="geometry"/>
+        </mxCell>
+        <mxCell id="state6" value="Annual population disease burden&#xa;Expected annual U.S. illnesses" style="rounded=1;arcSize=30;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=18;fillColor=#EDF7ED;strokeColor=#111111;strokeWidth=1.5;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="330" y="1055" width="520" height="82" as="geometry"/>
+        </mxCell>
+
+        <!-- External inputs (No parameter values in boxes) -->
+        <mxCell id="input1-back2" value="" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#111111;strokeWidth=1.2;" vertex="1" parent="1"><mxGeometry x="20" y="54" width="250" height="86" as="geometry"/></mxCell>
+        <mxCell id="input1-back1" value="" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#111111;strokeWidth=1.2;" vertex="1" parent="1"><mxGeometry x="17" y="59" width="250" height="86" as="geometry"/></mxCell>
+        <mxCell id="input1" value="Observed HuNoV GII survey data" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="64" width="250" height="86" as="geometry"/></mxCell>
+        
+        <mxCell id="input2" value="Tulane virus GC:PFU ratio (Q)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="253" width="250" height="86" as="geometry"/></mxCell>
+        
+        <mxCell id="input3" value="Internal time-temperature&#xa;profiles and thermal kinetics" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="453" width="250" height="86" as="geometry"/></mxCell>
+        
+        <mxCell id="input4" value="Oyster consumption and&#xa;serving size distribution" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="653" width="250" height="86" as="geometry"/></mxCell>
+        
+        <mxCell id="input-dr" value="HuNoV dose-response model" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="853" width="250" height="86" as="geometry"/></mxCell>
+        
+        <mxCell id="input5" value="FoodNet eating frequency&#xa;and U.S. population" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=14;fillColor=#F4F7FB;strokeColor=#111111;strokeWidth=1.2;spacing=7;" vertex="1" parent="1"><mxGeometry x="14" y="1053" width="250" height="86" as="geometry"/></mxCell>
+
+        <!-- Main transformations are named on arrows (Actions) -->
+        <mxCell id="edge12" value="Genome-copy-to-infectious-virus conversion" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#111111;strokeWidth=1.5;endArrow=block;endFill=1;fontFamily=Arial;fontSize=14;labelBackgroundColor=#FFFFFF;align=center;verticalAlign=middle;" edge="1" parent="1" source="state1" target="state2"><mxGeometry x="0" y="0" relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge23" value="Dynamic thermal inactivation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#111111;strokeWidth=1.5;endArrow=block;endFill=1;fontFamily=Arial;fontSize=14;labelBackgroundColor=#FFFFFF;align=center;verticalAlign=middle;" edge="1" parent="1" source="state2" target="state3"><mxGeometry x="0" y="0" relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge34" value="Serving-level dose aggregation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#111111;strokeWidth=1.5;endArrow=block;endFill=1;fontFamily=Arial;fontSize=14;labelBackgroundColor=#FFFFFF;align=center;verticalAlign=middle;" edge="1" parent="1" source="state3" target="state4"><mxGeometry x="0" y="0" relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge45" value="Dose-response evaluation" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#111111;strokeWidth=1.5;endArrow=block;endFill=1;fontFamily=Arial;fontSize=14;labelBackgroundColor=#FFFFFF;align=center;verticalAlign=middle;" edge="1" parent="1" source="state4" target="state5"><mxGeometry x="0" y="0" relative="1" as="geometry"/></mxCell>
+        <mxCell id="edge56" value="Population disease burden scaling" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#111111;strokeWidth=1.5;endArrow=block;endFill=1;fontFamily=Arial;fontSize=14;labelBackgroundColor=#FFFFFF;align=center;verticalAlign=middle;" edge="1" parent="1" source="state5" target="state6"><mxGeometry x="0" y="0" relative="1" as="geometry"/></mxCell>
+
+        <!-- Side inputs feed the output they help determine -->
+        <mxCell id="in-edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input1" target="state1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="in-edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input2" target="state2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="in-edge3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input3" target="state3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="in-edge4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input4" target="state4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="in-edge-dr" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input-dr" target="state5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="in-edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#555555;strokeWidth=1.2;endArrow=block;endFill=1;" edge="1" parent="1" source="input5" target="state6"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <!-- Assessment-stage brackets -->
+        <mxCell id="exp-v" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="910" y="55" width="2" height="682" as="geometry"/></mxCell>
+        <mxCell id="exp-top" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="55" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="exp-bottom" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="735" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="exp-mid" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="911" y="395" width="24" height="2" as="geometry"/></mxCell>
+        <mxCell id="exp-label" value="Exposure&#xa;assessment" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=16;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="940" y="365" width="155" height="62" as="geometry"/></mxCell>
+
+        <mxCell id="haz-v" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="910" y="775" width="2" height="58" as="geometry"/></mxCell>
+        <mxCell id="haz-top" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="775" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="haz-bottom" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="831" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="haz-mid" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="911" y="803" width="24" height="2" as="geometry"/></mxCell>
+        <mxCell id="haz-label" value="Hazard&#xa;characterization" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=16;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="940" y="773" width="172" height="62" as="geometry"/></mxCell>
+
+        <mxCell id="risk-v" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="910" y="855" width="2" height="282" as="geometry"/></mxCell>
+        <mxCell id="risk-top" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="855" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="risk-bottom" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="882" y="1135" width="30" height="2" as="geometry"/></mxCell>
+        <mxCell id="risk-mid" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#111111;strokeColor=#111111;strokeWidth=0;" vertex="1" parent="1"><mxGeometry x="911" y="995" width="24" height="2" as="geometry"/></mxCell>
+        <mxCell id="risk-label" value="Risk&#xa;characterization" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontFamily=Arial;fontSize=16;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="940" y="965" width="172" height="62" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

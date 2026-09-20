@@ -305,18 +305,10 @@ format_risk_interval <- function(median_value, lower_value, upper_value) {
   )
 }
 
-save_dual_format <- function(p, output_filepath, width, height, dpi = 300) {
-  if (!is.null(output_filepath)) {
-    base_path <- tools::file_path_sans_ext(output_filepath)
-    ggsave(paste0(base_path, ".png"), p, width = width, height = height, dpi = dpi)
-    ggsave(paste0(base_path, ".tiff"), p, width = width, height = height, dpi = dpi, compression = "lzw")
-  }
-}
 
 plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_metric = "mean_p_illness", threshold = 1e-4) {
   heatmap_data <- summary_df %>%
     mutate(
-      time_label = paste0(time_min, " min"),
       method_label = str_to_title(method),
       size_label = factor(str_to_title(size), levels = c("Small", "Medium", "Large", "Mixed")),
       serving_label = paste0(serving_size, " Oysters / Serving"),
@@ -329,7 +321,7 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
   p <- ggplot(
     heatmap_data,
     aes(
-      x = factor(time_label, levels = unique(time_label[order(time_min)])),
+      x = factor(time_min),
       y = size_label,
       fill = plot_risk
     )
@@ -343,30 +335,32 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
       stroke = 0.55,
       size = 2.2
     ) +
-    facet_grid(serving_label ~ method_label) +
+    facet_grid(serving_label ~ method_label, scales = "free_x", space = "free_x") +
     scale_fill_gradientn(
       colors = c("#F7FBFF", "#D6EAF8", "#9ECAE1", "#FDD49E", "#FC8D59", "#B30000"),
       trans = "log10",
       limits = c(1e-6, 1e-1),
       breaks = 10^(-6:-1),
-      labels = paste0("1e-", 6:1),
-      name = metric_title
+      labels = scales::math_format(10^.x),
+      name = metric_title,
+      guide = guide_colorbar(title.position = "top", title.hjust = 0.5, barwidth = unit(8, "cm"), barheight = unit(0.4, "cm"))
     ) +
     labs(
-      x = "Cooking holding time (min)",
-      y = "Oyster Size Category",
-      caption = sprintf("Open circles mark conditions with risk < %g.", threshold)
+      x = "Cooking holding time (minutes)",
+      y = "Oyster Size Category"
     ) +
-    theme_minimal(base_size = 11) +
+    theme_bw(base_size = 13) +
     theme(
       panel.grid = element_blank(),
       strip.background = element_rect(fill = "grey92", color = "grey55"),
-      strip.text = element_text(face = "bold", size = 11),
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      legend.position = "bottom"
+      strip.text = element_text(face = "bold", size = 13),
+      axis.title = element_text(face = "bold", size = 14),
+      axis.text = element_text(face = "bold", size = 12),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold", size = 12)
     )
 
-  save_dual_format(p, output_filepath, width = 10, height = 7, dpi = 300)
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 10, height = 7, dpi = 300, compression = "lzw")
 
   p
 }
@@ -456,13 +450,13 @@ plot_tornado_sensitivity <- function(
       y = NULL,
       fill = NULL
     ) +
-    theme_minimal(base_size = 11) +
+    theme_bw(base_size = 11) +
     theme(
       panel.grid.major.y = element_blank(),
       legend.position = "bottom"
     )
   
-  save_dual_format(p, output_filepath, width = 8, height = 4.8, dpi = 300)
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8, height = 4.8, dpi = 300, compression = "lzw")
 
   p
 }
@@ -584,10 +578,10 @@ plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
       y = "Empirical Cumulative Distribution F(x)",
       color = NULL
     ) +
-    theme_minimal(base_size = 11) +
+    theme_bw(base_size = 11) +
     theme(legend.position = "bottom")
   
-  save_dual_format(p, output_filepath, width = 8, height = 4.8, dpi = 300)
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8, height = 4.8, dpi = 300, compression = "lzw")
   
   p
 }
@@ -617,7 +611,7 @@ assess_simulation_convergence <- function(
       se_beta = se_fit$beta
     )
     tibble(
-      Dimension = "Variability (N_var)",
+      Dimension = "Variability",
       SampleSize = sz_v,
       Mean_P_illness = risk_res$mean_p_ill,
       P95_P_illness = risk_res$p95_p_ill
@@ -635,7 +629,7 @@ assess_simulation_convergence <- function(
       se_beta = se_fit$beta
     )
     tibble(
-      Dimension = "Uncertainty (N_unc)",
+      Dimension = "Uncertainty",
       SampleSize = sz_u,
       Mean_P_illness = risk_res$mean_p_ill,
       P95_P_illness = risk_res$p95_p_ill
@@ -651,20 +645,20 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
     geom_line(linewidth = 1.0) +
     geom_point(size = 2.5) +
     facet_wrap(~ Dimension, scales = "free_x") +
-    scale_color_manual(values = c("Variability (N_var)" = "#2F6F9F", "Uncertainty (N_unc)" = "#B65C45")) +
+    scale_color_manual(values = c("Variability" = "#2980B9", "Uncertainty" = "#C0392B")) +
     labs(
-      x = "Sample Size Iterations",
-      y = "Mean Norovirus Illness Risk P(illness)",
+      x = "Sample size",
+      y = "Mean HuNoV G2 illness risk P(illness)",
       color = NULL
     ) +
-    theme_minimal(base_size = 11) +
+    theme_bw(base_size = 11) +
     theme(
       legend.position = "none",
       strip.background = element_rect(fill = "grey92", color = "grey55"),
       strip.text = element_text(face = "bold", size = 11)
     )
 
-  save_dual_format(p, output_filepath, width = 9, height = 4.5, dpi = 300)
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 9, height = 4.5, dpi = 300, compression = "lzw")
 
   p
 }
@@ -699,7 +693,7 @@ run_mcf_scenario_matrix <- function(
     
     res_df <- tibble(
       `Cooking Method` = method,
-      `Oyster Size` = size,
+      `Oyster size` = size,
       `Holding Time (min)` = time_min
     )
     res_df[[col_unsafe]] <- mcf_res$n_unsafe
