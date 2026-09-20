@@ -439,7 +439,9 @@ plot_tornado_sensitivity <- function(
   )
   
   if (model_type == "geeraerd") {
-    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    set.seed(1503)
+    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
       `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
       `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
@@ -448,11 +450,13 @@ plot_tornado_sensitivity <- function(
     )
     title_text <- "Dynamic Geeraerd Inactivation Model"
   } else {
-    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    set.seed(1503)
+    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
-      `Mafart Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
-      `Mafart Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Mafart Shape Parameter (p)` = therm_post$p[idx_u]
+      `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish[idx_u],
+      `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell[idx_u],
+      `Mafart Shape Parameter (p)` = therm_post$p_weibull[idx_u]
     )
     title_text <- "Dynamic Meta-Analysis Inactivation Model"
   }
@@ -570,7 +574,9 @@ run_monte_carlo_filtering <- function(
   )
   
   if (model_type == "geeraerd") {
-    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+    set.seed(1503)
+    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
       `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
       `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
@@ -578,11 +584,13 @@ run_monte_carlo_filtering <- function(
       `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0[idx_u]
     )
   } else {
-    therm_post <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+    set.seed(1503)
+    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
     input_data <- input_data %>% mutate(
-      `Mafart Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
-      `Mafart Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Mafart Shape Parameter (p)` = therm_post$p[idx_u]
+      `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish[idx_u],
+      `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell[idx_u],
+      `Mafart Shape Parameter (p)` = therm_post$p_weibull[idx_u]
     )
   }
   
