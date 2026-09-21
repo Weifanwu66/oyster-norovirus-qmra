@@ -39,10 +39,10 @@ plot_combined_tornado_sensitivity <- function(
   if (file.exists(csv_path)) {
     module1_u <- read_csv(csv_path, show_col_types = FALSE)
     n_u <- min(n_u_raw, nrow(module1_u))
-    q_inv_val <- module1_u$q_inv
-    prev_mean_val <- module1_u$prevalence_mean
-    conc_mean_val <- module1_u$positive_mean_gc
-    conc_shape_val <- module1_u$concentration_gamma_shape
+    q_inv_val <- module1_u$q_inv[1:n_u]
+    prev_mean_val <- module1_u$prevalence_mean[1:n_u]
+    conc_mean_val <- module1_u$positive_mean_gc[1:n_u]
+    conc_shape_val <- module1_u$concentration_gamma_shape[1:n_u]
     conc_scale_val <- conc_mean_val / conc_shape_val  # theta = mu / k
   } else {
     stop("module1_uncertainty_inputs.csv not found!")
