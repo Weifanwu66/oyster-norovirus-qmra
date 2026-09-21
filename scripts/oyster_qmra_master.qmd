@@ -830,13 +830,11 @@ plot_annual_illness_burden <- function(summary_df) {
   # Order the factors
   df_plot$cooking_time_label <- factor(df_plot$cooking_time_label, levels = c("0 (Raw)", "2", "4", "6", "8", "10", "12", "14", "16"))
   df_plot$method_label <- factor(df_plot$method_label, levels = c("Baking", "Steaming"))
-  df_plot$serving_size_label <- factor(df_plot$serving_size_label, levels = c("6 oysters", "12 oysters"))
   
-  ggplot(df_plot, aes(x = cooking_time_label, y = expected_annual_us_illnesses, fill = serving_size_label)) +
-    geom_col(position = position_dodge(width = 0.8), width = 0.7, color = "black") +
+  ggplot(df_plot, aes(x = cooking_time_label, y = expected_annual_us_illnesses)) +
+    geom_col(width = 0.7, color = "black", fill = "#D55E00") +
     facet_wrap(~method_label, scales = "free_x") +
     scale_y_continuous(labels = scales::comma) +
-    scale_fill_manual(values = c("6 oysters" = "#2C3E50", "12 oysters" = "#D55E00")) +
     theme_bw() +
     theme(
       legend.position = "bottom",
@@ -848,8 +846,7 @@ plot_annual_illness_burden <- function(summary_df) {
     ) +
     labs(
       x = "Cooking holding time (minutes)",
-      y = "Expected Annual U.S. HuNoV Illnesses",
-      fill = "Serving size"
+      y = "Expected Annual U.S. HuNoV Illnesses"
     )
 }
 
