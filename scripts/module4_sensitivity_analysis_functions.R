@@ -260,8 +260,8 @@ run_monte_carlo_filtering <- function(
       Parameter = param_name,
       `KS_D_statistic` = as.numeric(ks_res$statistic),
       `p_value` = ks_res$p.value,
-      n_unsafe = length(val_unsafe),
-      n_safe = length(val_safe)
+      n_above_threshold = length(val_unsafe),
+      n_below_threshold = length(val_safe)
     )
   }) 
   
@@ -272,7 +272,7 @@ run_monte_carlo_filtering <- function(
   } else {
     ks_table <- tibble(
       Parameter = character(), KS_D_statistic = numeric(), p_value = numeric(),
-      n_unsafe = integer(), n_safe = integer(), p_value_BH_FDR = numeric()
+      n_above_threshold = integer(), n_below_threshold = integer(), p_value_BH_FDR = numeric()
     )
   }
   
@@ -438,8 +438,8 @@ run_mcf_scenario_matrix <- function(
   model_type <- match.arg(model_type)
   scen_names <- names(postcook_nodes_list)
   
-  col_unsafe <- sprintf("Unsafe Iterations (P >= %g)", cutoff)
-  col_safe   <- sprintf("Safe Iterations (P < %g)", cutoff)
+  col_unsafe <- sprintf("Above-threshold Iterations (P >= %g)", cutoff)
+  col_safe   <- sprintf("Below-threshold Iterations (P < %g)", cutoff)
 
   map_dfr(scen_names, function(scen_key) {
     post_node <- postcook_nodes_list[[scen_key]]
@@ -459,7 +459,7 @@ run_mcf_scenario_matrix <- function(
     n_unsafe <- sum(mcf_res$is_unsafe)
     n_safe <- sum(!mcf_res$is_unsafe)
     
-    top_param <- if (n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$Parameter[1] else "None (Fully Safe)"
+    top_param <- if (n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$Parameter[1] else "None (Fully Below-threshold)"
     top_d     <- if (n_unsafe >= 5 && nrow(mcf_res$ks_table) > 0) mcf_res$ks_table$KS_D_statistic[1] else NA_real_
     
     res_df <- tibble(
