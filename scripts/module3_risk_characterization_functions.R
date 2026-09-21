@@ -77,7 +77,7 @@ evaluate_model_risk_summary <- function(
     per_oyster_dose_node <- postcook_nodes_list[[scen_key]]
     node_mat <- unclass(per_oyster_dose_node)[, , 1]
     
-    map_dfr(c(6, 12), function(serving_sz) {
+    map_dfr(c(12), function(serving_sz) {
       serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
       
       for (u in seq_len(n_unc)) {
@@ -127,7 +127,7 @@ evaluate_model_risk_summary <- function(
     mat_m <- unclass(postcook_nodes_list[[key_medium]])[, , 1]
     mat_l <- unclass(postcook_nodes_list[[key_large]])[, , 1]
     
-    map_dfr(c(6, 12), function(serving_sz) {
+    map_dfr(c(12), function(serving_sz) {
       serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
       
       set.seed(3030 + serving_sz)
