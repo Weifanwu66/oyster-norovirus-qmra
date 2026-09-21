@@ -263,9 +263,18 @@ run_monte_carlo_filtering <- function(
       n_unsafe = length(val_unsafe),
       n_safe = length(val_safe)
     )
-  }) %>%
-    mutate(`p_value_BH_FDR` = p.adjust(p_value, method = "BH")) %>%
-    arrange(desc(KS_D_statistic))
+  }) 
+  
+  if (nrow(ks_table) > 0) {
+    ks_table <- ks_table %>%
+      mutate(`p_value_BH_FDR` = p.adjust(p_value, method = "BH")) %>%
+      arrange(desc(KS_D_statistic))
+  } else {
+    ks_table <- tibble(
+      Parameter = character(), KS_D_statistic = numeric(), p_value = numeric(),
+      n_unsafe = integer(), n_safe = integer(), p_value_BH_FDR = numeric()
+    )
+  }
   
   list(
     input_data = input_data,
