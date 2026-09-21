@@ -389,6 +389,20 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
     geom_line(linewidth = 1.0) +
     geom_point(size = 2.5) +
     facet_wrap(~ Dimension, scales = "free_x") +
+    scale_y_continuous(labels = function(x) {
+      out <- character(length(x))
+      for (i in seq_along(x)) {
+        if (is.na(x[i])) {
+          out[i] <- NA
+        } else if (x[i] == 0) {
+          out[i] <- "0"
+        } else {
+          sc <- formatC(x[i], format = "e", digits = 1)
+          out[i] <- gsub("e\\+?(-?)0*", " %*% 10^\\1", sc)
+        }
+      }
+      parse(text = out)
+    }) +
     scale_color_manual(values = c("Variability" = "#2980B9", "Uncertainty" = "#C0392B")) +
     labs(
       x = "Iteration",
