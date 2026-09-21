@@ -101,8 +101,7 @@ plot_combined_tornado_sensitivity <- function(
   cols_g <- tibble(
     `Geeraerd~thermal~sensitivity~(z)` = therm_g$z,
     `Geeraerd~reference~inactivation~time~(D[r])` = therm_g$D_R,
-    `Geeraerd~residual~tail~(log[10]*N[min])` = therm_g$logNmin,
-    `Geeraerd~initial~shoulder~(log[10]*N[0])` = therm_g$logN0
+    `Geeraerd~residual~tail~(log[10]*N[min])` = therm_g$logNmin
   )
   df_g <- process_model(post_mat_g, "Geeraerd model", therm_g, cols_g)
   
@@ -235,8 +234,7 @@ run_monte_carlo_filtering <- function(
     input_data <- input_data %>% mutate(
       `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
       `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u],
-      `Geeraerd Initial Shoulder (log10 N_0)` = therm_post$logN0[idx_u]
+      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u]
     )
   } else {
     therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
