@@ -508,6 +508,7 @@ Section 1.3 produces 2D per-oyster post-cook residual dose matrices $GC_{\text{p
 prevalence_selected_u <- c(mc2d_prevalence_node)
 
 # Left-Censored Bayesian Gamma Concentration model draws
+set.seed(2026) # CRITICAL FIX: Ensures the exact same 2000 concentrations are drawn every time!
 concentration_selected <- nishida_concentration_posterior[
   sample.int(nrow(nishida_concentration_posterior), n_uncertainty),
 ]
