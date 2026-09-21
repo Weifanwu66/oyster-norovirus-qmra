@@ -216,8 +216,9 @@ nishida_concentration_loo <- list(
 nishida_concentration_model_comparison <-
   loo::loo_compare(nishida_concentration_loo) %>%
   as.data.frame() %>%
+  rownames_to_column(var = "model") %>%
   as_tibble() %>%
-  select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
+  dplyr::select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
 
 nishida_concentration_fit <- nishida_concentration_gamma_fit
 nishida_concentration_model_comparison
@@ -899,7 +900,6 @@ plot_combined_tornado_sensitivity(
   postcook_nodes_list_meta = mc2d_postcook_nodes_meta,
   output_filepath = here("figures", "module4_sensitivity_tornado_p_illness_combined.tiff")
 )
-
 ```
 
 ## Regional Sensitivity Analysis: Monte Carlo Filtering (MCF)
@@ -912,6 +912,7 @@ mcf_result_geeraerd <- run_monte_carlo_filtering(
   model_type = "geeraerd"
 )
 write_csv(mcf_result_geeraerd$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_geeraerd.csv"))
+mcf_result_geeraerd$ks_table
 plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_parameters_geeraerd.tiff"))
 
 # Run MCF for Meta-Analysis (Representative Scenario: Steaming Medium 4 min)
@@ -921,6 +922,7 @@ mcf_result_meta <- run_monte_carlo_filtering(
   model_type = "meta"
 )
 write_csv(mcf_result_meta$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_meta.csv"))
+mcf_result_meta$ks_table
 plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parameters_meta.tiff"))
 ```
 
