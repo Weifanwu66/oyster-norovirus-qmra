@@ -302,7 +302,7 @@ calculate_us_illness_burden <- function(
   # Evaluate Raw Oyster Risk (Survival S = 1.0)
   node_mat <- unclass(precook_node)[, , 1]
   
-  raw_risk_list <- map_dfr(c(6, 12), function(serving_sz) {
+  raw_risk_list <- map_dfr(c(12), function(serving_sz) {
     serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
     for (u in seq_len(n_unc)) {
       col_doses <- node_mat[, u]
