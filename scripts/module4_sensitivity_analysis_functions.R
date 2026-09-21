@@ -236,7 +236,7 @@ run_monte_carlo_filtering <- function(
     input_data <- input_data %>% mutate(
       `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
       `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Geeraerd Residual Tail (log10 N_min)` = therm_post$logNmin[idx_u]
+      `Geeraerd (log₁₀ Nₘᵢₙ)` = therm_post$logNmin[idx_u]
     )
   } else {
     therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
