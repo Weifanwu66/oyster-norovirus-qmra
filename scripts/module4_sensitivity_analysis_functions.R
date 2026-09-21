@@ -255,7 +255,7 @@ run_monte_carlo_filtering <- function(
     
     if (length(val_unsafe) == 0 || length(val_safe) == 0) return(NULL)
     
-    ks_res <- ks.test(val_unsafe, val_safe)
+    ks_res <- suppressWarnings(ks.test(val_unsafe, val_safe))
     tibble(
       Parameter = param_name,
       `KS_D_statistic` = as.numeric(ks_res$statistic),
@@ -270,10 +270,12 @@ run_monte_carlo_filtering <- function(
   list(
     input_data = input_data,
     is_unsafe = is_unsafe,
-    ks_table = ks_table
+    ks_table = ks_table,
+    cutoff = cutoff
   )
 }
 
+#' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves
 #' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves
 plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
   top_param <- mcf_result$ks_table$Parameter[1]
@@ -281,8 +283,9 @@ plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
   unsafe_label <- sprintf("Unsafe / High-Risk (P >= %g)", mcf_result$cutoff)
   safe_label   <- sprintf("Safe / Compliant (P < %g)", mcf_result$cutoff)
 
-  df_plot <- mcf_result$sample_df %>%
+  df_plot <- mcf_result$input_data %>%
     mutate(
+      is_unsafe = mcf_result$is_unsafe,
       Group = if_else(is_unsafe, unsafe_label, safe_label)
     )
   
@@ -299,7 +302,7 @@ plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
     theme_bw(base_size = 11) +
     theme(legend.position = "bottom")
   
-  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8, height = 4.8, dpi = 300, compression = "lzw")
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 6.5, height = 4.5, dpi = 300, compression = "lzw")
   
   p
 }
