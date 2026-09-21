@@ -215,12 +215,14 @@ run_monte_carlo_filtering <- function(
   
   is_unsafe <- p_illness >= cutoff
   
+  conc_scale_val <- conc_mean_val / conc_shape_val
+  
   input_data <- tibble(
-    `Harvest Prevalence (P_prev)` = prev_mean_val,
-    `Positive Mean Concentration (μ_conc)` = conc_mean_val,
-    `Positive Concentration Shape (κ_conc)` = conc_shape_val,
-    `RT-qPCR: Infectious Virus Ratio (Q)` = 1 / q_inv_val,
-    `Host Secretor Susceptibility P(Se+)` = p_se_val,
+    `Harvest prevalence P_prev` = prev_mean_val,
+    `Contamination scale θ` = conc_scale_val,
+    `Contamination shape κ` = conc_shape_val,
+    `RT - qPCR to infectious ratio Q` = 1 / q_inv_val,
+    `Host secretor susceptibility P(Se+)` = p_se_val,
     `DR α (Infection)` = a_val,
     `DR β (Infection)` = b_val,
     `DR η (Illness)` = n_val,
