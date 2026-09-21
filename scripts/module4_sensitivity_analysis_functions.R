@@ -275,34 +275,57 @@ run_monte_carlo_filtering <- function(
   )
 }
 
-#' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves
-#' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves
+#' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves for Top 4 Parameters
 plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
-  top_param <- mcf_result$ks_table$Parameter[1]
+  top_params <- mcf_result$ks_table$Parameter[1:4]
   
-  unsafe_label <- sprintf("Unsafe / High-Risk (P >= %g)", mcf_result$cutoff)
-  safe_label   <- sprintf("Safe / Compliant (P < %g)", mcf_result$cutoff)
+  # Use internal grouping keys
+  unsafe_key <- "unsafe"
+  safe_key   <- "safe"
 
   df_plot <- mcf_result$input_data %>%
     mutate(
       is_unsafe = mcf_result$is_unsafe,
-      Group = if_else(is_unsafe, unsafe_label, safe_label)
-    )
+      Group = if_else(is_unsafe, unsafe_key, safe_key)
+    ) %>%
+    dplyr::select(Group, all_of(top_params)) %>%
+    tidyr::pivot_longer(cols = -Group, names_to = "Parameter", values_to = "Value")
   
-  col_scale <- setNames(c("#D95F02", "#1B9E77"), c(unsafe_label, safe_label))
-
-  p <- ggplot(df_plot, aes(x = .data[[top_param]], color = Group)) +
+  # Ensure facets are ordered by importance (KS D-statistic)
+  df_plot$Parameter <- factor(df_plot$Parameter, levels = top_params)
+  
+  col_scale <- setNames(c("#D95F02", "#1B9E77"), c(unsafe_key, safe_key))
+  
+  # Format the cutoff dynamically
+  cutoff_val <- mcf_result$cutoff
+  cutoff_exp <- as.numeric(gsub("^.*e", "", format(cutoff_val, scientific = TRUE)))
+  if(cutoff_exp == 0 && cutoff_val == 0.0001) cutoff_exp <- -4 # fallback just in case
+  
+  # Build expression labels for the legend
+  safe_expr <- bquote("Below-threshold group (P < 10"^{.(cutoff_exp)}*")")
+  unsafe_expr <- bquote("Above-threshold group (P \u2265 10"^{.(cutoff_exp)}*")")
+  
+  p <- ggplot(df_plot, aes(x = Value, color = Group)) +
     stat_ecdf(geom = "step", linewidth = 1.1) +
-    scale_color_manual(values = col_scale) +
+    scale_color_manual(
+      values = col_scale,
+      labels = c(safe_key = safe_expr, unsafe_key = unsafe_expr)
+    ) +
+    facet_wrap(~ Parameter, scales = "free_x", ncol = 2) +
     labs(
-      x = top_param,
+      x = "Parameter Value",
       y = "Empirical Cumulative Distribution F(x)",
       color = NULL
     ) +
-    theme_bw(base_size = 11) +
-    theme(legend.position = "bottom")
+    theme_bw(base_size = 12) +
+    theme(
+      legend.position = "bottom",
+      strip.text = element_text(size = 11, face = "bold"),
+      strip.background = element_rect(fill = "white", color = "white"),
+      panel.grid.minor = element_blank()
+    )
   
-  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 6.5, height = 4.5, dpi = 300, compression = "lzw")
+  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8.5, height = 6.5, dpi = 300, compression = "lzw")
   
   p
 }

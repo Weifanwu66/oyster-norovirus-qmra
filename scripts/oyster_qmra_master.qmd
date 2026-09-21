@@ -935,7 +935,7 @@ mcf_result_geeraerd <- run_monte_carlo_filtering(
   model_type = "geeraerd"
 )
 write_csv(mcf_result_geeraerd$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_geeraerd.csv"))
-plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_parameter_geeraerd.tiff"))
+plot_mcf_cdf_curves(mcf_result_geeraerd, here("figures", "module4_mcf_cdf_top_parameters_geeraerd.tiff"))
 
 # Run MCF for Meta-Analysis (Representative Scenario: Steaming Medium 4 min)
 mcf_result_meta <- run_monte_carlo_filtering(
@@ -944,7 +944,7 @@ mcf_result_meta <- run_monte_carlo_filtering(
   model_type = "meta"
 )
 write_csv(mcf_result_meta$ks_table, here("results", "module4_sensitivity_analysis", "module4_mcf_ks_test_results_meta.csv"))
-plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parameter_meta.tiff"))
+plot_mcf_cdf_curves(mcf_result_meta, here("figures", "module4_mcf_cdf_top_parameters_meta.tiff"))
 ```
 
 ```{r module5-mcf-scenario-matrix}
