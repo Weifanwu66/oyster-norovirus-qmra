@@ -249,7 +249,7 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
       stroke = 0.55,
       size = 2.2
     ) +
-    facet_grid(serving_label ~ method_label, scales = "free_x", space = "free_x") +
+    facet_grid(. ~ method_label, scales = "free_x", space = "free_x") +
     scale_fill_gradientn(
       colors = c("#F7FBFF", "#D6EAF8", "#9ECAE1", "#FDD49E", "#FC8D59", "#B30000"),
       trans = "log10",
