@@ -216,7 +216,11 @@ format_risk_interval <- function(median_value, lower_value, upper_value) {
 }
 
 
-plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_metric = "mean_p_illness", threshold = 1e-4) {
+plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_metric = "mean_p_illness", threshold = 1e-4, include_half_dozen = FALSE) {
+  if (!include_half_dozen) {
+    summary_df <- summary_df %>% filter(serving_size == 12)
+  }
+  
   heatmap_data <- summary_df %>%
     mutate(
       method_label = str_to_title(method),
@@ -226,7 +230,7 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
       below_threshold = plot_risk < threshold
     )
 
-  metric_title <- if (risk_metric == "mean_p_illness") "Mean Population P(illness)" else "Median P(illness)"
+  metric_title <- if (risk_metric == "mean_p_illness") "Mean P(ill)" else "Median P(ill)"
 
   p <- ggplot(
     heatmap_data,
@@ -251,13 +255,13 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
       trans = "log10",
       limits = c(1e-6, 1e-1),
       breaks = 10^(-6:-1),
-      labels = scales::math_format(10^.x),
+      labels = scales::trans_format("log10", scales::math_format(10^.x)),
       name = metric_title,
       guide = guide_colorbar(title.position = "top", title.hjust = 0.5, barwidth = unit(8, "cm"), barheight = unit(0.4, "cm"))
     ) +
     labs(
       x = "Cooking holding time (minutes)",
-      y = "Oyster Size Category"
+      y = "Oyster size category"
     ) +
     theme_bw(base_size = 13) +
     theme(
