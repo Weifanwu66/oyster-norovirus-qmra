@@ -214,7 +214,6 @@ nishida_concentration_loo <- list(
 nishida_concentration_model_comparison <-
   loo::loo_compare(nishida_concentration_loo) %>%
   as.data.frame() %>%
-  rownames_to_column(var = "model") %>%
   as_tibble() %>%
   dplyr::select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
 
@@ -663,7 +662,6 @@ source(here("scripts", "module3_risk_characterization_functions.R"))
 module4_output_summary_geeraerd <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.rds"))
 module4_output_summary_meta <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.rds"))
 
-# Display Risk Summaries for the rendered document
 module4_output_summary_geeraerd %>%
   dplyr::select(method, size, time_min, serving_size, mean_p_illness, p025_p_illness, p975_p_illness, mean_rrr, p025_rrr, p975_rrr) %>%
   knitr::kable(caption = "Serving Risk Summary (Geeraerd Baseline)")
