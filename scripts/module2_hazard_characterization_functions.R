@@ -43,8 +43,10 @@ fit_beta_from_mean_ci <- function(mean_value = 0.72, q025 = 0.63, q975 = 0.80) {
 # 2. Teunis et al. (2020) Table A14 Dose-Response Parameter Generator & Core Math
 
 #' Sample Teunis et al. (2020) Table A14 Dose-Response MCMC parameter draws
-sample_teunis_2020_draws <- function(n_unc = 1000, seed = 1060) {
-  set.seed(seed)
+sample_teunis_2020_draws <- function(n_unc = 1000, seed = 1060L) {
+  withr::local_seed(seed,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   mu_inf <- c(-3.16, 1.82)
   cov_inf <- matrix(c(2.88, -2.01, -2.01, 3.64), ncol = 2)
 
@@ -89,3 +91,11 @@ p.ill.inf <- function(n, r, D) {
   1 - (1 + D / n)^(-r)
 }
 
+
+# Same U-level host draws are reused by risk and sensitivity calculations.
+sample_host_susceptibility <- function(n_unc, se_alpha, se_beta) {
+  withr::with_seed(2020L,
+    rbeta(n_unc, shape1 = se_alpha, shape2 = se_beta),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
+}

@@ -25,8 +25,7 @@ evaluate_teunis_risk_matrix <- function(
     se_beta  <- se_fit$beta
   }
   
-  set.seed(2020)
-  p_se_u <- rbeta(n_unc, shape1 = se_alpha, shape2 = se_beta)
+  p_se_u <- sample_host_susceptibility(n_unc, se_alpha, se_beta)
 
   a_u <- par1.btr(teunis_draws$w_eta, teunis_draws$z_eta)
   b_u <- par2.btr(teunis_draws$w_eta, teunis_draws$z_eta)
@@ -49,14 +48,16 @@ evaluate_teunis_risk_matrix <- function(
     mean_p_inf = mean(p_inf_matrix),
     mean_p_ill = mean(p_ill_matrix),
     median_p_ill = median(p_ill_matrix),
-    p05_p_ill = quantile(p_ill_matrix, 0.05),
-    p50_p_ill = median(p_ill_matrix),
-    p95_p_ill = quantile(p_ill_matrix, 0.95)
+    p025_p_ill = quantile(colMeans(p_ill_matrix), 0.025),
+    p50_p_ill = median(colMeans(p_ill_matrix)),
+    p975_p_ill = quantile(colMeans(p_ill_matrix), 0.975),
+    mean_p_ill_unc = colMeans(p_ill_matrix)
   )
 }
 
 #' High-level function to evaluate Module 4 risk across single-size and mixed-size conditions
 evaluate_model_risk_summary <- function(
+  precook_node,
   postcook_nodes_list,
   condition_grid,
   n_var = 10000,
@@ -71,6 +72,16 @@ evaluate_model_risk_summary <- function(
     se_fit <- fit_beta_from_mean_ci()
   }
   
+  # Compute Raw Baseline (Serving Size 12) for Risk Reduction
+  raw_mat <- unclass(precook_node)[, , 1]
+  raw_serving_dose <- sample_serving_dose(raw_mat, 12, n_var, n_unc)
+  raw_risk_res <- evaluate_teunis_risk_matrix(
+    dose_matrix = raw_serving_dose,
+    teunis_draws = teunis_draws,
+    se_alpha = se_fit$alpha,
+    se_beta = se_fit$beta
+  )
+
   # 1. Single Size Scenarios (Small, Medium, Large)
   single_size_res <- pmap_dfr(condition_grid, function(method, size, time_min) {
     scen_key <- paste(method, size, paste0(time_min, "min"), sep = "_")
@@ -78,15 +89,8 @@ evaluate_model_risk_summary <- function(
     node_mat <- unclass(per_oyster_dose_node)[, , 1]
     
     map_dfr(c(12), function(serving_sz) {
-      serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
-      
-      for (u in seq_len(n_unc)) {
-        col_doses <- node_mat[, u]
-        # Fast vectorized matrix sampling for serving size
-        sampled_mat <- matrix(sample(col_doses, size = n_var * serving_sz, replace = TRUE), nrow = n_var, ncol = serving_sz)
-        serving_dose_matrix[, u] <- rowSums(sampled_mat)
-      }
-      
+      serving_dose_matrix <- sample_serving_dose(node_mat, serving_sz, n_var, n_unc)
+
       risk_res <- evaluate_teunis_risk_matrix(
         dose_matrix = serving_dose_matrix,
         teunis_draws = teunis_draws,
@@ -94,6 +98,8 @@ evaluate_model_risk_summary <- function(
         se_beta = se_fit$beta
       )
       
+      rrr_vec <- 1 - (risk_res$mean_p_ill_unc / raw_risk_res$mean_p_ill_unc)
+
       res_row <- tibble(
         method = method,
         size = size,
@@ -104,11 +110,14 @@ evaluate_model_risk_summary <- function(
         mean_p_infection = risk_res$mean_p_inf,
         mean_p_illness = risk_res$mean_p_ill,
         median_p_illness = risk_res$median_p_ill,
-        p025_p_illness = risk_res$p05_p_ill,
-        p975_p_illness = risk_res$p95_p_ill
+        p025_p_illness = risk_res$p025_p_ill,
+        p975_p_illness = risk_res$p975_p_ill,
+        mean_rrr = mean(rrr_vec),
+        p025_rrr = quantile(rrr_vec, 0.025),
+        p975_rrr = quantile(rrr_vec, 0.975)
       )
       
-      rm(serving_dose_matrix, risk_res)
+      rm(serving_dose_matrix, risk_res, rrr_vec)
       gc(verbose = FALSE)
       
       res_row
@@ -130,26 +139,39 @@ evaluate_model_risk_summary <- function(
     map_dfr(c(12), function(serving_sz) {
       serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
       
-      set.seed(3030 + serving_sz)
+      # Pre-generate size assignments (S=1, M=2, L=3) using an independent seed 
+      # so it doesn't affect the exact oyster row pairing logic below.
+      withr::local_seed(5050L + serving_sz,
+                        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+                        .rng_sample_kind = "Rejection")
+      sz_choices <- matrix(sample.int(3, size = n_var * serving_sz, replace = TRUE), nrow = n_var, ncol = serving_sz)
+      
+      # Now use the exact same seed as `sample_serving_dose` for oyster selection
+      withr::local_seed(4040L + as.integer(serving_sz),
+                        .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+                        .rng_sample_kind = "Rejection")
       for (u in seq_len(n_unc)) {
         col_s <- mat_s[, u]
         col_m <- mat_m[, u]
         col_l <- mat_l[, u]
         
-        # Fast vectorized matrix sampling for multinomial mixed sizes per serving
-        sz_choices <- matrix(sample.int(3, size = n_var * serving_sz, replace = TRUE), nrow = n_var, ncol = serving_sz)
+        # 1. Select the exact same raw oysters as the raw comparator
+        idx <- matrix(sample.int(n_var, n_var * serving_sz, replace = TRUE), nrow = n_var, ncol = serving_sz)
         
+        # 2. Assign the pre-drawn random sizes
         serving_mat <- matrix(0, nrow = n_var, ncol = serving_sz)
         for (k in seq_len(serving_sz)) {
           c_k <- sz_choices[, k]
+          i_k <- idx[, k]
+          
+          d_k <- numeric(n_var)
           idx1 <- c_k == 1
           idx2 <- c_k == 2
           idx3 <- c_k == 3
           
-          d_k <- numeric(n_var)
-          if (any(idx1)) d_k[idx1] <- sample(col_s, size = sum(idx1), replace = TRUE)
-          if (any(idx2)) d_k[idx2] <- sample(col_m, size = sum(idx2), replace = TRUE)
-          if (any(idx3)) d_k[idx3] <- sample(col_l, size = sum(idx3), replace = TRUE)
+          if (any(idx1)) d_k[idx1] <- col_s[i_k[idx1]]
+          if (any(idx2)) d_k[idx2] <- col_m[i_k[idx2]]
+          if (any(idx3)) d_k[idx3] <- col_l[i_k[idx3]]
           
           serving_mat[, k] <- d_k
         }
@@ -164,6 +186,8 @@ evaluate_model_risk_summary <- function(
         se_beta = se_fit$beta
       )
       
+      rrr_vec <- 1 - (risk_res$mean_p_ill_unc / raw_risk_res$mean_p_ill_unc)
+
       res_row <- tibble(
         method = method,
         size = "mixed",
@@ -174,11 +198,14 @@ evaluate_model_risk_summary <- function(
         mean_p_infection = risk_res$mean_p_inf,
         mean_p_illness = risk_res$mean_p_ill,
         median_p_illness = risk_res$median_p_ill,
-        p025_p_illness = risk_res$p05_p_ill,
-        p975_p_illness = risk_res$p95_p_ill
+        p025_p_illness = risk_res$p025_p_ill,
+        p975_p_illness = risk_res$p975_p_ill,
+        mean_rrr = mean(rrr_vec),
+        p025_rrr = quantile(rrr_vec, 0.025),
+        p975_rrr = quantile(rrr_vec, 0.975)
       )
       
-      rm(serving_dose_matrix, risk_res)
+      rm(serving_dose_matrix, risk_res, rrr_vec)
       gc(verbose = FALSE)
       
       res_row
@@ -303,16 +330,8 @@ calculate_us_illness_burden <- function(
   node_mat <- unclass(precook_node)[, , 1]
   
   raw_risk_list <- map_dfr(c(12), function(serving_sz) {
-    serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
-    for (u in seq_len(n_unc)) {
-      col_doses <- node_mat[, u]
-      s_col <- numeric(n_var)
-      for (k in seq_len(serving_sz)) {
-        s_col <- s_col + sample(col_doses, size = n_var, replace = TRUE)
-      }
-      serving_dose_matrix[, u] <- s_col
-    }
-    
+    serving_dose_matrix <- sample_serving_dose(node_mat, serving_sz, n_var, n_unc)
+
     risk_res <- evaluate_teunis_risk_matrix(dose_matrix = serving_dose_matrix)
     
     tibble(
@@ -373,4 +392,23 @@ calculate_us_illness_burden <- function(
     full_summary = combined_summary,
     manuscript_table = manuscript_table
   )
+}
+
+# One sampling convention for raw and homogeneous cooked servings. Reusing the
+# same seed/indices across scenarios isolates cooking effects from sampling noise.
+sample_serving_dose <- function(node_mat, serving_size, n_var = nrow(node_mat),
+                                n_unc = ncol(node_mat)) {
+  stopifnot(n_var == nrow(node_mat), n_unc == ncol(node_mat),
+            length(serving_size) == 1L, is.finite(serving_size),
+            serving_size >= 1L, serving_size == as.integer(serving_size))
+  withr::local_seed(4040L + as.integer(serving_size),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
+  result <- matrix(0, nrow = n_var, ncol = n_unc)
+  for (u in seq_len(n_unc)) {
+    idx <- matrix(sample.int(nrow(node_mat), n_var * serving_size, replace = TRUE),
+                  nrow = n_var, ncol = serving_size)
+    result[, u] <- rowSums(matrix(node_mat[idx, u], nrow = n_var))
+  }
+  result
 }

@@ -13,11 +13,10 @@ plot_combined_tornado_sensitivity <- function(
   se_alpha = NULL,
   se_beta = NULL
 ) {
-  set.seed(4040)
+  withr::local_seed(4040L,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   
-  if (is.null(teunis_draws)) {
-    teunis_draws <- sample_teunis_2020_draws(n_unc = 500)
-  }
   
   if (is.null(se_alpha) || is.null(se_beta)) {
     se_fit <- fit_beta_from_mean_ci()
@@ -48,12 +47,14 @@ plot_combined_tornado_sensitivity <- function(
     stop("module1_uncertainty_inputs.csv not found!")
   }
   
-  teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_u, replace = TRUE), ]
+  if (is.null(teunis_draws)) teunis_draws <- sample_teunis_2020_draws(n_u)
+  stopifnot(nrow(teunis_draws) == n_u)
+  teunis_sel <- teunis_draws[seq_len(n_u), ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   b_val <- par2.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
   n_val <- par2.btr(teunis_sel$w_mu, teunis_sel$z_mu)
-  p_se_val <- rbeta(n_u, shape1 = se_alpha, shape2 = se_beta)
+  p_se_val <- sample_host_susceptibility(n_u, se_alpha, se_beta)
   
   # Base Uncertainty Input Table
   base_data <- tibble(
@@ -96,8 +97,10 @@ plot_combined_tornado_sensitivity <- function(
   
   # Geeraerd
   therm_post_g <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
-  set.seed(1503)
-  therm_g <- therm_post_g %>% dplyr::slice_sample(n = n_u, replace = TRUE)
+  therm_g <- withr::with_seed(1503L,
+    therm_post_g %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   cols_g <- tibble(
     `Geeraerd~thermal~sensitivity~(z)` = therm_g$z,
     `Geeraerd~reference~inactivation~time~(D[r])` = therm_g$D_R,
@@ -107,8 +110,10 @@ plot_combined_tornado_sensitivity <- function(
   
   # Mafart
   therm_post_m <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
-  set.seed(1503)
-  therm_m <- therm_post_m %>% dplyr::slice_sample(n = n_u, replace = TRUE)
+  therm_m <- withr::with_seed(1503L,
+    therm_post_m %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   cols_m <- tibble(
     `Mafart-Weibull~thermal~sensitivity~(z)` = therm_m$z_shellfish,
     `Mafart-Weibull~reference~inactivation~time~(D[r])` = therm_m$Dref_shell,
@@ -162,11 +167,10 @@ run_monte_carlo_filtering <- function(
   model_type = c("geeraerd", "meta")
 ) {
   model_type <- match.arg(model_type)
-  set.seed(5050)
+  withr::local_seed(5050L,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   
-  if (is.null(teunis_draws)) {
-    teunis_draws <- sample_teunis_2020_draws(n_unc = 500)
-  }
   
   if (is.null(se_alpha) || is.null(se_beta)) {
     se_fit <- fit_beta_from_mean_ci()
@@ -191,18 +195,22 @@ run_monte_carlo_filtering <- function(
     stop("module1_uncertainty_inputs.csv not found!")
   }
   
-  idx_v <- sample.int(n_v, n_sample, replace = TRUE)
   idx_u <- sample.int(n_u, n_sample, replace = TRUE)
   
-  postcook_val <- sapply(seq_len(n_sample), function(i) post_mat[idx_v[i], idx_u[i]])
-  p_se_val <- rbeta(n_sample, shape1 = se_alpha, shape2 = se_beta)
+  # Ensure MCF evaluates risk for a full 12-oyster serving, not just 1 oyster!
+  postcook_val <- sapply(seq_len(n_sample), function(i) {
+    sum(post_mat[sample.int(n_v, 12, replace = TRUE), idx_u[i]])
+  })
+  p_se_val <- sample_host_susceptibility(n_u, se_alpha, se_beta)[idx_u]
   
     q_inv_val <- module1_u$q_inv[idx_u]
     prev_mean_val <- module1_u$prevalence_mean[idx_u]
     conc_mean_val <- module1_u$positive_mean_gc[idx_u]
     conc_shape_val <- module1_u$concentration_gamma_shape[idx_u]
   
-  teunis_sel <- teunis_draws[sample.int(nrow(teunis_draws), n_sample, replace = TRUE), ]
+  if (is.null(teunis_draws)) teunis_draws <- sample_teunis_2020_draws(n_u)
+  stopifnot(nrow(teunis_draws) == n_u)
+  teunis_sel <- teunis_draws[idx_u, ]
   a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   b_val <- par2.btr(teunis_sel$w_eta, teunis_sel$z_eta)
   r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
@@ -231,8 +239,10 @@ run_monte_carlo_filtering <- function(
   
   if (model_type == "geeraerd") {
     therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
-    set.seed(1503)
-    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
+    therm_post <- withr::with_seed(1503L,
+      therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+      .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+      .rng_sample_kind = "Rejection")
     input_data <- input_data %>% mutate(
       `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
       `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
@@ -240,8 +250,10 @@ run_monte_carlo_filtering <- function(
     )
   } else {
     therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
-    set.seed(1503)
-    therm_post <- therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE)
+    therm_post <- withr::with_seed(1503L,
+      therm_post_raw %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+      .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+      .rng_sample_kind = "Rejection")
     input_data <- input_data %>% mutate(
       `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish[idx_u],
       `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell[idx_u],
@@ -367,7 +379,7 @@ assess_simulation_convergence <- function(
       Dimension = "Variability",
       SampleSize = sz_v,
       Mean_P_illness = risk_res$mean_p_ill,
-      P95_P_illness = risk_res$p95_p_ill
+      P975_P_illness = risk_res$p975_p_ill
     )
   })
 
@@ -385,7 +397,7 @@ assess_simulation_convergence <- function(
       Dimension = "Uncertainty",
       SampleSize = sz_u,
       Mean_P_illness = risk_res$mean_p_ill,
-      P95_P_illness = risk_res$p95_p_ill
+      P975_P_illness = risk_res$p975_p_ill
     )
   })
 

@@ -62,7 +62,11 @@ get_all_geeraerd_residuals <- function(p, split_data, known, times_list) {
   sum(unlist(res)^2)
 }
 
-fit_global_dynamic_geeraerd <- function(d, guess, known, lower = -Inf, upper = Inf, niter = 5000) {
+fit_global_dynamic_geeraerd <- function(d, guess, known, lower = -Inf, upper = Inf,
+                                       niter = 5000, seed = 7938L) {
+  withr::local_seed(seed,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   d <- d %>%
     dplyr::mutate(time = dplyr::if_else(.data$time < 2e-5, 2e-5, .data$time))
 
@@ -87,9 +91,11 @@ make_geeraerd_observed_fit_overlay <- function(
     known,
     n_posterior_draws = 1000,
     n_time_points = 150,
-    seed = 1503
+    seed = 8080L
 ) {
-  set.seed(seed)
+  withr::local_seed(seed,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
 
   observed_data <- observed_data %>%
     dplyr::mutate(
@@ -240,7 +246,7 @@ predict_geeraerd_dynamic_reduction <- function(
       D_R = theta$D_R,
       z = theta$z,
       N0 = 10^theta$logN0,
-      N_min = 1e-12
+      N_min = 10^theta$logNmin
     )
   )
 
@@ -329,6 +335,9 @@ run_module2_thermal_inactivation <- function(
 ) {
   time_grid <- make_module2_time_grid(target_time_grid)
 
+  withr::local_seed(9090L,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   theta_ge <- geeraerd_post %>%
     dplyr::slice_sample(n = n_uncertainty, replace = TRUE) %>%
     dplyr::mutate(uncertainty_iteration = dplyr::row_number())
@@ -519,7 +528,9 @@ run_module2_cooking_method_size_scenarios <- function(
 
   all_profiles <- dplyr::bind_rows(steam_S, steam_M, steam_L, bake_S, bake_M, bake_L)
 
-  set.seed(1503)
+  withr::local_seed(1503L,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
   theta_draws <- post_draws %>%
     dplyr::slice_sample(n = n_unc, replace = TRUE) %>%
     dplyr::mutate(uncertainty_iteration = dplyr::row_number())
@@ -577,3 +588,56 @@ run_module2_cooking_method_size_scenarios <- function(
   )
 }
 
+# ---------------------------------------------------------------------------
+# Functions previously defined inline in the QMD eval=FALSE blocks.
+# Moved here so they are always available when this script is sourced.
+# ---------------------------------------------------------------------------
+
+#' Multiply per-oyster pre-cook node by a survival fraction node (type "U")
+calculate_per_oyster_postcook_node <- function(precook_node, survival_node) {
+  precook_node * survival_node
+}
+
+#' Convert a long-format survival_data tibble into a named list of mc2d "U" nodes
+convert_survival_to_mc2d_nodes <- function(survival_df, n_unc = 2000) {
+  ndunc(n_unc)
+  scenarios <- survival_df %>% dplyr::distinct(method, size, time_min)
+
+  node_list <- list()
+  for (i in seq_len(nrow(scenarios))) {
+    m     <- scenarios$method[i]
+    sz    <- scenarios$size[i]
+    t_val <- scenarios$time_min[i]
+
+    vec_S <- survival_df %>%
+      dplyr::filter(method == m, size == sz, time_min == t_val) %>%
+      dplyr::arrange(uncertainty_iteration) %>%
+      dplyr::pull(survival_fraction)
+
+    node_key <- paste(m, sz, paste0(t_val, "min"), sep = "_")
+    node_list[[node_key]] <- mcdata(vec_S, type = "U")
+  }
+  node_list
+}
+
+#' Summarise per-oyster post-cook dose mc2d nodes into a tidy tibble
+summarize_postcook_dose_nodes <- function(postcook_nodes) {
+  purrr::map_dfr(names(postcook_nodes), function(node_key) {
+    node_mat <- unclass(postcook_nodes[[node_key]])[, , 1]
+    parts  <- strsplit(node_key, "_")[[1]]
+    m_val  <- parts[1]
+    sz_val <- parts[2]
+    t_val  <- as.numeric(gsub("min", "", parts[3]))
+
+    tibble::tibble(
+      method   = m_val,
+      size     = sz_val,
+      time_min = t_val,
+      mean_postcook_virions_per_oyster   = mean(node_mat),
+      median_postcook_virions_per_oyster = median(node_mat),
+      p95_postcook_virions_per_oyster    = quantile(node_mat, 0.95),
+      p99_postcook_virions_per_oyster    = quantile(node_mat, 0.99)
+    )
+  }) %>%
+    dplyr::arrange(method, size, time_min)
+}

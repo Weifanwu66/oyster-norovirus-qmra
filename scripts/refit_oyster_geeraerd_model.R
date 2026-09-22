@@ -6,10 +6,10 @@ library(tidyverse)
 library(here)
 
 project_root <- here::here()
-data_dir <- file.path(project_root, "data", "module_03_thermal_inactivation_oyster")
+data_dir <- file.path(project_root, "data", "module1_2_thermal_inactivation")
 output_dir <- file.path(project_root, "results", "module1_2_thermal_inactivation")
 
-source(file.path(project_root, "scripts", "module2_thermal_functions.R"))
+source(file.path(project_root, "scripts", "module1_exposure_assessment_thermal_inactivation_functions.R"))
 
 # 1. Load Sammi's original data
 dyn_path <- file.path(data_dir, "d_oys_pfu.RDS")
@@ -73,7 +73,7 @@ df_comeup_updated <- bind_rows(df_comeup, new_comeup)
 saveRDS(df_comeup_updated, file.path(data_dir, "df_comeup_updated.rds"))
 
 # 4. Observed dynamic heating model helpers are sourced from
-# scripts/module3_thermal_functions.R. They preserve replicate-specific
+# scripts/module1_exposure_assessment_thermal_inactivation_functions.R. They preserve replicate-specific
 # time-temperature profiles while fitting one shared global Geeraerd parameter
 # set across all observed profiles.
 
@@ -84,20 +84,19 @@ guess_ge <- c(D_R = 10, z = 10, logN0 = 3.6, logNmin = 2)
 lower_ge <- c(D_R = 0.1, z = 2, logN0 = 3, logNmin = 0)
 upper_ge <- c(D_R = 10, z = 15, logN0 = 6, logNmin = 3)
 
-set.seed(7938)
-
 fit_ge <- fit_global_dynamic_geeraerd(
   d = df_dyn_updated,
   guess = guess_ge,
   known = known_ge,
   lower = lower_ge,
   upper = upper_ge,
-  niter = 5000
+  niter = 5000,
+  seed = 7938L
 )
 
-saveRDS(fit_ge, file.path(output_dir, "module3_dynamic_geeraerd_fit.rds"))
+saveRDS(fit_ge, file.path(output_dir, "module1_2_dynamic_geeraerd_fit.rds"))
 
-fit_ge <- readRDS(file.path(output_dir, "module3_dynamic_geeraerd_fit.rds"))
+fit_ge <- readRDS(file.path(output_dir, "module1_2_dynamic_geeraerd_fit.rds"))
 
 # 6. Extract posterior parameter draws
 post_ge <- as.data.frame(fit_ge$pars) %>%
@@ -110,7 +109,7 @@ post_ge <- as.data.frame(fit_ge$pars) %>%
     N_min = 10^logNmin
   )
 
-saveRDS(post_ge, file.path(output_dir, "module1_2_geeraerd_posterior_draws.rds"))
+saveRDS(post_ge, file.path(output_dir, "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
 
 # 7. Posterior model fit check: fitted Geeraerd curves over observed data
 geeraerd_fit_overlay <- make_geeraerd_observed_fit_overlay(
@@ -121,11 +120,11 @@ geeraerd_fit_overlay <- make_geeraerd_observed_fit_overlay(
 
 write_csv(
   geeraerd_fit_overlay$prediction_summary,
-  file.path(output_dir, "module3_geeraerd_observed_vs_fitted_curve_summary.csv")
+  file.path(output_dir, "module1_2_geeraerd_observed_vs_fitted_curve_summary.csv")
 )
 
 ggsave(
-  file.path(output_dir, "module3_geeraerd_observed_vs_fitted_overlay.png"),
+  file.path(output_dir, "module1_2_geeraerd_observed_vs_fitted_overlay.png"),
   plot = geeraerd_fit_overlay$plot,
   width = 10,
   height = 12,
