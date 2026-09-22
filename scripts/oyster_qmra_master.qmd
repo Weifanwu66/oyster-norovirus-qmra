@@ -1,9 +1,9 @@
 ---
 title: "Oyster Norovirus GII QMRA"
 format:
-  html:
+  pdf:
     toc: true
-    code-fold: false
+    number-sections: true
 execute:
   warning: false
   message: false
