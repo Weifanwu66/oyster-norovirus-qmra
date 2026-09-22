@@ -211,9 +211,12 @@ nishida_concentration_loo <- list(
   pooled_gamma = loo::loo(nishida_concentration_gamma_fit),
   pooled_lognormal = loo::loo(nishida_concentration_lognormal_fit)
 )
-nishida_concentration_model_comparison <-
-  loo::loo_compare(nishida_concentration_loo) %>%
-  as.data.frame() %>%
+comp_df <- as.data.frame(loo::loo_compare(nishida_concentration_loo))
+if (!"model" %in% names(comp_df)) {
+  comp_df <- tibble::rownames_to_column(comp_df, var = "model")
+}
+
+nishida_concentration_model_comparison <- comp_df %>%
   as_tibble() %>%
   dplyr::select(model, elpd_diff, se_diff, elpd_loo, se_elpd_loo, looic, se_looic)
 
