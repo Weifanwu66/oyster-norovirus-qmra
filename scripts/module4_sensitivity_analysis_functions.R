@@ -197,9 +197,9 @@ run_monte_carlo_filtering <- function(
   
   idx_u <- sample.int(n_u, n_sample, replace = TRUE)
   
-  # Ensure MCF evaluates risk for a full 12-oyster serving, not just 1 oyster!
+  # Ensure MCF evaluates risk for a full 6-oyster serving, not just 1 oyster!
   postcook_val <- sapply(seq_len(n_sample), function(i) {
-    sum(post_mat[sample.int(n_v, 12, replace = TRUE), idx_u[i]])
+    sum(post_mat[sample.int(n_v, 6, replace = TRUE), idx_u[i]])
   })
   p_se_val <- sample_host_susceptibility(n_u, se_alpha, se_beta)[idx_u]
   

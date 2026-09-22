@@ -469,7 +469,7 @@ Section 1.3 combines the pre-harvest initial contamination $GC_{\text{precook}}(
 
 In strict adherence to QMRA principles, **Initial contamination is sampled independently from oyster size**, establishing the baseline population-average exposure. The physical variation of oyster size (**Small, Medium, Large**) operates directly through the size-stratified thermal inactivation kinetics $S_{\text{size}}(U)$ for both **Steaming** and **Baking** scenarios.
 
-Section 1.3 produces 2D per-oyster post-cook residual dose matrices $GC_{\text{postcook, size}}(V, U)$ (in Genome Copies / Infectious Units per oyster). Serving aggregation (6 and 12 oysters) and post-hoc random permutation size mixing are evaluated downstream in Module 2.
+Section 1.3 produces 2D per-oyster post-cook residual dose matrices $GC_{\text{postcook, size}}(V, U)$ (in Genome Copies / Infectious Units per oyster). Serving aggregation (6 oysters) and post-hoc random permutation size mixing are evaluated downstream in Module 2.
 
 ## Individual Oyster Pre-Cook & Post-Cook Dose Generation
 
@@ -604,7 +604,7 @@ source(here("scripts", "module2_hazard_characterization_functions.R"))
 
 ## Purpose
 
-Module 2 receives the 2D per-oyster exposure dose matrices from Section 1.3, constructs 12-oyster mixed servings (with post-hoc size mixing across Small, Medium, and Large oysters), and evaluates infection and illness risk per serving.
+Module 2 receives the 2D per-oyster exposure dose matrices from Section 1.3, constructs 6-oyster mixed servings (with post-hoc size mixing across Small, Medium, and Large oysters), and evaluates infection and illness risk per serving.
 
 Dose-response risk is evaluated using the **Teunis et al. (2020)** Kummer hypergeometric dose-response model ($1F1$) parameterized for HuNoV GII ($Se^+$):
 

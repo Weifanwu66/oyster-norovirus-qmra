@@ -72,9 +72,9 @@ evaluate_model_risk_summary <- function(
     se_fit <- fit_beta_from_mean_ci()
   }
   
-  # Compute Raw Baseline (Serving Size 12) for Risk Reduction
+  # Compute Raw Baseline (Serving Size 6) for Risk Reduction
   raw_mat <- unclass(precook_node)[, , 1]
-  raw_serving_dose <- sample_serving_dose(raw_mat, 12, n_var, n_unc)
+  raw_serving_dose <- sample_serving_dose(raw_mat, 6, n_var, n_unc)
   raw_risk_res <- evaluate_teunis_risk_matrix(
     dose_matrix = raw_serving_dose,
     teunis_draws = teunis_draws,
@@ -88,7 +88,7 @@ evaluate_model_risk_summary <- function(
     per_oyster_dose_node <- postcook_nodes_list[[scen_key]]
     node_mat <- unclass(per_oyster_dose_node)[, , 1]
     
-    map_dfr(c(12), function(serving_sz) {
+    map_dfr(c(6), function(serving_sz) {
       serving_dose_matrix <- sample_serving_dose(node_mat, serving_sz, n_var, n_unc)
 
       risk_res <- evaluate_teunis_risk_matrix(
@@ -136,7 +136,7 @@ evaluate_model_risk_summary <- function(
     mat_m <- unclass(postcook_nodes_list[[key_medium]])[, , 1]
     mat_l <- unclass(postcook_nodes_list[[key_large]])[, , 1]
     
-    map_dfr(c(12), function(serving_sz) {
+    map_dfr(c(6), function(serving_sz) {
       serving_dose_matrix <- matrix(0, nrow = n_var, ncol = n_unc)
       
       # Pre-generate size assignments (S=1, M=2, L=3) using an independent seed 
@@ -245,7 +245,7 @@ format_risk_interval <- function(median_value, lower_value, upper_value) {
 
 plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_metric = "mean_p_illness", threshold = 1e-4, include_half_dozen = FALSE) {
   if (!include_half_dozen) {
-    summary_df <- summary_df %>% filter(serving_size == 12)
+    summary_df <- summary_df %>% filter(serving_size == 6)
   }
   
   heatmap_data <- summary_df %>%
@@ -329,7 +329,7 @@ calculate_us_illness_burden <- function(
   # Evaluate Raw Oyster Risk (Survival S = 1.0)
   node_mat <- unclass(precook_node)[, , 1]
   
-  raw_risk_list <- map_dfr(c(12), function(serving_sz) {
+  raw_risk_list <- map_dfr(c(6), function(serving_sz) {
     serving_dose_matrix <- sample_serving_dose(node_mat, serving_sz, n_var, n_unc)
 
     risk_res <- evaluate_teunis_risk_matrix(dose_matrix = serving_dose_matrix)
