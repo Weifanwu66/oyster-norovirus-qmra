@@ -663,6 +663,15 @@ source(here("scripts", "module3_risk_characterization_functions.R"))
 module4_output_summary_geeraerd <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_geeraerd.rds"))
 module4_output_summary_meta <- readRDS(here("results", "module3_risk_characterization", "module3_serving_risk_summary_meta.rds"))
 
+# Display Risk Summaries for the rendered document
+module4_output_summary_geeraerd %>%
+  dplyr::select(method, size, time_min, serving_size, mean_p_illness, p025_p_illness, p975_p_illness, mean_rrr, p025_rrr, p975_rrr) %>%
+  knitr::kable(caption = "Serving Risk Summary (Geeraerd Baseline)")
+
+module4_output_summary_meta %>%
+  dplyr::select(method, size, time_min, serving_size, mean_p_illness, p025_p_illness, p975_p_illness, mean_rrr, p025_rrr, p975_rrr) %>%
+  knitr::kable(caption = "Serving Risk Summary (Meta-Analysis)")
+
 # Generate Baseline Risk Heatmap
 plot_module4_risk_heatmap(
   summary_df = module4_output_summary_geeraerd,
