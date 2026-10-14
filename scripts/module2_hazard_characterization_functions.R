@@ -1,5 +1,5 @@
 # Module 2: Hazard Characterization Function Library
-# Contains Host Susceptibility Beta fitting (Messner et al. 2014) and 
+# Contains Host Susceptibility Beta fitting (Messner et al. 2014) and
 # Teunis et al. (2020) Dose-Response parameter sampling and mathematics.
 
 # 1. Host Susceptibility Beta Parameter Back-Transformation (Messner et al. 2014)

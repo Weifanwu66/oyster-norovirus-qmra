@@ -5,6 +5,8 @@
 library(gsl)
 library(MASS)
 
+source(here::here('scripts', 'module2_hazard_characterization_functions.R'))
+
 
 evaluate_teunis_risk_matrix <- function(
   dose_matrix,
@@ -248,6 +250,9 @@ plot_module4_risk_heatmap <- function(summary_df, output_filepath = NULL, risk_m
     summary_df <- summary_df %>% filter(serving_size == 6)
   }
   
+  # Remove baking times > 10 min for the heatmap
+  summary_df <- summary_df %>% filter(!(method == "baking" & time_min > 10))
+  
   heatmap_data <- summary_df %>%
     mutate(
       method_label = str_to_title(method),
@@ -335,14 +340,14 @@ calculate_us_illness_burden <- function(
     risk_res <- evaluate_teunis_risk_matrix(dose_matrix = serving_dose_matrix)
     
     tibble(
-      food_category = "Raw oysters",
+      food_category = "Cooked oysters",
       method = "raw",
-      size = "all",
+      size = "mixed",
       time_min = 0,
       serving_size = serving_sz,
       mean_p_illness = risk_res$mean_p_ill,
-      annual_us_eating_events = total_us_raw_events,
-      expected_annual_us_illnesses = risk_res$mean_p_ill * total_us_raw_events
+      annual_us_eating_events = total_us_cooked_events,
+      expected_annual_us_illnesses = risk_res$mean_p_ill * total_us_cooked_events
     )
   })
 
@@ -371,7 +376,7 @@ calculate_us_illness_burden <- function(
     mutate(
       Cooking_Condition = if_else(
         method == "raw",
-        "No cooking (Raw)",
+        "Baseline (No heat, 0 min)",
         paste(str_to_title(method), str_to_title(size), paste0(time_min, " min"))
       ),
       `Serving Size` = paste(serving_size, "oysters"),

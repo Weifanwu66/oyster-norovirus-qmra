@@ -124,10 +124,10 @@ write_csv(
 )
 
 ggsave(
-  file.path(output_dir, "module1_2_geeraerd_observed_vs_fitted_overlay.png"),
+  file.path(output_dir, "module1_2_geeraerd_observed_vs_fitted_overlay.tiff"),
   plot = geeraerd_fit_overlay$plot,
   width = 10,
   height = 12,
   dpi = 300,
-  bg = "white"
+  compression = "lzw"
 )

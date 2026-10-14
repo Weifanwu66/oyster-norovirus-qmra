@@ -1,6 +1,15 @@
 # Module 4: Model Diagnostics & Sensitivity Analysis Function Library
 # Contains functions for 2D Monte Carlo Convergence Assessment, Spearman Rank Correlation 
 # Tornado Plots, and Monte Carlo Filtering (MCF) Regional Sensitivity Analysis.
+source(here::here('scripts', 'module2_hazard_characterization_functions.R'))
+source(here::here('scripts', 'module3_risk_characterization_functions.R'))
+sample_host_susceptibility <- function(n_unc, se_alpha, se_beta) {
+  withr::with_seed(2020L,
+    rbeta(n_unc, shape1 = se_alpha, shape2 = se_beta),
+    .rng_kind = 'Mersenne-Twister', .rng_normal_kind = 'Inversion',
+    .rng_sample_kind = 'Rejection')
+}
+
 
 # 5. Global Spearman Rank Correlation Tornado Plot Function
 #' Plot Tornado Sensitivity Diagram for Norovirus Illness Risk P(illness)
@@ -59,14 +68,14 @@ plot_combined_tornado_sensitivity <- function(
   # Base Uncertainty Input Table
   base_data <- tibble(
     `Harvest~prevalence~(P[prev])` = prev_mean_val,
-    `Positive~concentration~scale~(theta)` = conc_scale_val,
-    `Positive~concentration~shape~(kappa)` = conc_shape_val,
-    `RT-qPCR~infectious~virus~ratio~(Q)` = q_inv_val,
+    `Concentration~scale~(theta)` = conc_scale_val,
+    `Concentration~shape~(kappa)` = conc_shape_val,
+    `'GC:Infectious virus ratio'~(Q)` = q_inv_val,
     `Host~secretor~susceptibility~(P[Se^"+"])` = p_se_val,
     `DR~alpha~(infection)` = a_val,
     `DR~beta~(infection)` = b_val,
     `DR~eta~(illness)` = n_val,
-    `DR~rho~(illness)` = r_val
+    `DR~r~(illness)` = r_val
   )
   
   # Process single model
@@ -102,9 +111,9 @@ plot_combined_tornado_sensitivity <- function(
     .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
     .rng_sample_kind = "Rejection")
   cols_g <- tibble(
-    `Geeraerd~thermal~sensitivity~(z)` = therm_g$z,
-    `Geeraerd~reference~inactivation~time~(D[r])` = therm_g$D_R,
-    `Geeraerd~residual~tail~(log[10]*N[min])` = therm_g$logNmin
+    `Thermal~sensitivity~(z)` = therm_g$z,
+    `'Decimal reduction time'~(D[57*degree*C])` = therm_g$D_R,
+    `Residual~tail~(log[10]*N[min])` = therm_g$logNmin
   )
   df_g <- process_model(post_mat_g, "Geeraerd model", therm_g, cols_g)
   
@@ -115,9 +124,9 @@ plot_combined_tornado_sensitivity <- function(
     .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
     .rng_sample_kind = "Rejection")
   cols_m <- tibble(
-    `Mafart-Weibull~thermal~sensitivity~(z)` = therm_m$z_shellfish,
-    `Mafart-Weibull~reference~inactivation~time~(D[r])` = therm_m$Dref_shell,
-    `Mafart-Weibull~shape~parameter~(p)` = therm_m$p_weibull
+    `Thermal~sensitivity~(z)` = therm_m$z_shellfish,
+    `'Decimal reduction time'~(delta[60*degree*C])` = therm_m$Dref_shell,
+    `Shape~parameter~(p)` = therm_m$p_weibull
   )
   df_m <- process_model(post_mat_m, "Mafart-Weibull model", therm_m, cols_m)
   
@@ -152,6 +161,196 @@ plot_combined_tornado_sensitivity <- function(
   if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 12, height = 5.5, dpi = 300, compression = "lzw")
   
   p
+}
+
+# 5b. Global Spearman Rank Correlation Tornado Plot Function for Relative Risk Reduction (RRR)
+#' Plot Combined Tornado Sensitivity Diagram for Relative Risk Reduction (RRR) at 4 min
+plot_combined_tornado_sensitivity_rrr <- function(
+  postcook_nodes_list_geeraerd,
+  postcook_nodes_list_meta,
+  precook_node = NULL,
+  output_filepath = NULL,
+  output_csvpath = NULL,
+  teunis_draws = NULL,
+  se_alpha = NULL,
+  se_beta = NULL
+) {
+  withr::local_seed(4040L,
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
+  
+  if (is.null(se_alpha) || is.null(se_beta)) {
+    se_fit <- fit_beta_from_mean_ci()
+    se_alpha <- se_fit$alpha
+    se_beta  <- se_fit$beta
+  }
+  
+  scen_key <- grep("steaming_medium_4min", names(postcook_nodes_list_geeraerd), value = TRUE)[1]
+  if (is.na(scen_key)) scen_key <- names(postcook_nodes_list_geeraerd)[1]
+  
+  # --- Data for Geeraerd ---
+  post_mat_g <- unclass(postcook_nodes_list_geeraerd[[scen_key]])[, , 1]
+  # --- Data for Meta ---
+  post_mat_m <- unclass(postcook_nodes_list_meta[[scen_key]])[, , 1]
+  
+  # --- Data for Raw (Pre-cook) ---
+  if (is.null(precook_node)) {
+    precook_path <- here::here("results", "module1_3_exposure_dose_calculation", "infectious_dose_precook_node.rds")
+    if (file.exists(precook_path)) {
+      precook_node <- readRDS(precook_path)
+    } else {
+      stop("infectious_dose_precook_node.rds not found!")
+    }
+  }
+  raw_mat <- unclass(precook_node)[, , 1]
+  
+  n_u_raw <- min(ncol(post_mat_g), ncol(post_mat_m), ncol(raw_mat))
+  
+  csv_path <- here::here("results", "module1_3_exposure_dose_calculation", "module1_uncertainty_inputs.csv")
+  if (file.exists(csv_path)) {
+    module1_u <- readr::read_csv(csv_path, show_col_types = FALSE)
+    n_u <- min(n_u_raw, nrow(module1_u))
+    q_inv_val <- module1_u$q_inv[1:n_u]
+    prev_mean_val <- module1_u$prevalence_mean[1:n_u]
+    conc_mean_val <- module1_u$positive_mean_gc[1:n_u]
+    conc_shape_val <- module1_u$concentration_gamma_shape[1:n_u]
+    conc_scale_val <- conc_mean_val / conc_shape_val  # theta = mu / k
+  } else {
+    stop("module1_uncertainty_inputs.csv not found!")
+  }
+  
+  if (is.null(teunis_draws)) teunis_draws <- sample_teunis_2020_draws(n_u)
+  stopifnot(nrow(teunis_draws) == n_u)
+  teunis_sel <- teunis_draws[seq_len(n_u), ]
+  a_val <- par1.btr(teunis_sel$w_eta, teunis_sel$z_eta)
+  b_val <- par2.btr(teunis_sel$w_eta, teunis_sel$z_eta)
+  r_val <- par1.btr(teunis_sel$w_mu, teunis_sel$z_mu)
+  n_val <- par2.btr(teunis_sel$w_mu, teunis_sel$z_mu)
+  p_se_val <- sample_host_susceptibility(n_u, se_alpha, se_beta)
+  
+  # Compute Raw illness risk per realization u across variability
+  p_ill_raw <- numeric(n_u)
+  for (u in seq_len(n_u)) {
+    dose_raw_u <- raw_mat[, u]
+    p_inf_se_raw <- p.inf.hyp1f1(a_val[u], b_val[u], dose_raw_u)
+    p_ill_given_inf_raw <- p.ill.inf(n_val[u], r_val[u], dose_raw_u)
+    p_ill_raw_u <- p_se_val[u] * p_inf_se_raw * p_ill_given_inf_raw
+    p_ill_raw[u] <- mean(p_ill_raw_u)
+  }
+  
+  # Base Uncertainty Input Table
+  base_data <- tibble::tibble(
+    `Harvest~prevalence~(P[prev])` = prev_mean_val,
+    `Concentration~scale~(theta)` = conc_scale_val,
+    `Concentration~shape~(kappa)` = conc_shape_val,
+    `'GC:Infectious virus ratio'~(Q)` = q_inv_val,
+    `Host~secretor~susceptibility~(P[Se^"+"])` = p_se_val,
+    `DR~alpha~(infection)` = a_val,
+    `DR~beta~(infection)` = b_val,
+    `DR~eta~(illness)` = n_val,
+    `DR~r~(illness)` = r_val
+  )
+  
+  # Process single model for RRR
+  process_model_rrr <- function(post_mat, model_name, therm_df, therm_cols) {
+    mean_p_illness <- numeric(n_u)
+    for (u in seq_len(n_u)) {
+      dose_u <- post_mat[, u]
+      p_inf_se <- p.inf.hyp1f1(a_val[u], b_val[u], dose_u)
+      p_ill_given_inf <- p.ill.inf(n_val[u], r_val[u], dose_u)
+      p_ill_u <- p_se_val[u] * p_inf_se * p_ill_given_inf
+      mean_p_illness[u] <- mean(p_ill_u)
+    }
+    
+    # Calculate realization-specific RRR: 1 - P_ill,u(cooked) / P_ill,u(raw)
+    rrr_vec <- 1 - (mean_p_illness / p_ill_raw)
+    
+    input_data <- dplyr::bind_cols(base_data, therm_cols)
+    
+    purrr::map_dfr(names(input_data), function(var_name) {
+      x <- input_data[[var_name]]
+      valid_idx <- which(!is.na(x) & !is.na(rrr_vec))
+      ct <- stats::cor.test(x[valid_idx], rrr_vec[valid_idx], method = "spearman", exact = FALSE)
+      rho <- unname(ct$estimate)
+      p_val <- unname(ct$p.value)
+      tibble::tibble(
+        Model = model_name,
+        input = var_name,
+        spearman_rho = rho,
+        p_value = p_val,
+        abs_rho = abs(rho),
+        n_valid = length(valid_idx),
+        direction = dplyr::if_else(rho >= 0, "Positive Association", "Negative Association")
+      )
+    }) %>%
+      dplyr::filter(!is.na(spearman_rho)) %>%
+      dplyr::arrange(desc(abs_rho)) %>%
+      dplyr::mutate(rank = dplyr::row_number())
+  }
+  
+  # Geeraerd
+  therm_post_g <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_geeraerd_thermal_kinetics_posterior.rds"))
+  therm_g <- withr::with_seed(1503L,
+    therm_post_g %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
+  cols_g <- tibble::tibble(
+    `Thermal~sensitivity~(z)` = therm_g$z,
+    `'Decimal reduction time'~(D[57*degree*C])` = therm_g$D_R,
+    `Residual~tail~(log[10]*N[min])` = therm_g$logNmin
+  )
+  df_g <- process_model_rrr(post_mat_g, "Geeraerd model", therm_g, cols_g)
+  
+  # Mafart
+  therm_post_m <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
+  therm_m <- withr::with_seed(1503L,
+    therm_post_m %>% dplyr::slice_sample(n = n_u, replace = TRUE),
+    .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
+    .rng_sample_kind = "Rejection")
+  cols_m <- tibble::tibble(
+    `Thermal~sensitivity~(z)` = therm_m$z_shellfish,
+    `'Decimal reduction time'~(delta[60*degree*C])` = therm_m$Dref_shell,
+    `Shape~parameter~(p)` = therm_m$p_weibull
+  )
+  df_m <- process_model_rrr(post_mat_m, "Mafart-Weibull model", therm_m, cols_m)
+  
+  cor_df <- dplyr::bind_rows(df_g, df_m)
+  
+  # Export CSV if requested
+  if (!is.null(output_csvpath)) {
+    readr::write_csv(cor_df, output_csvpath)
+  }
+  
+  # Ordered levels per facet
+  cor_df <- cor_df %>%
+    dplyr::arrange(abs_rho) %>%
+    dplyr::mutate(input_ordered = factor(paste(input, Model, sep = "___"), levels = paste(input, Model, sep = "___")))
+  
+  p <- ggplot2::ggplot(cor_df, ggplot2::aes(x = spearman_rho, y = input_ordered, fill = direction)) +
+    ggplot2::geom_col(width = 0.65) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+    ggplot2::facet_wrap(~ Model, scales = "free_y", ncol = 2) +
+    ggplot2::scale_fill_manual(values = c("Positive Association" = "#2F6F9F", "Negative Association" = "#B65C45")) +
+    ggplot2::scale_y_discrete(labels = function(x) parse(text = sub("___.*$", "", x))) +
+    ggplot2::scale_x_continuous(limits = c(-1.0, 1.0), breaks = seq(-1.0, 1.0, by = 0.2)) +
+    ggplot2::labs(
+      x = expression(paste("Spearman rank correlation coefficient", " (", rho, ")")),
+      y = NULL,
+      fill = NULL
+    ) +
+    ggplot2::theme_bw(base_size = 11) +
+    ggplot2::theme(
+      strip.text = ggplot2::element_text(face = "bold", size = 12),
+      strip.background = ggplot2::element_rect(fill = "#f0f0f0", color = "NA"),
+      panel.grid.major.y = ggplot2::element_blank(),
+      legend.position = "bottom"
+    )
+  
+  if (!is.null(output_filepath)) {
+    ggplot2::ggsave(filename = output_filepath, plot = p, width = 12, height = 5.5, dpi = 300, compression = "lzw")
+  }
+  
+  return(list(plot = p, data = cor_df))
 }
 
 # 6. Monte Carlo Filtering (MCF) & Regional Sensitivity Analysis (Saltelli et al. 2004, FDA Pouillot et al. 2022)
@@ -221,7 +420,7 @@ run_monte_carlo_filtering <- function(
   p_ill_given_inf <- p.ill.inf(n_val, r_val, dose_effective)
   p_illness <- p_se_val * p_inf_se * p_ill_given_inf
   
-  is_unsafe <- p_illness >= cutoff
+  is_unsafe <- p_illness > cutoff
   
   conc_scale_val <- conc_mean_val / conc_shape_val
   
@@ -229,12 +428,12 @@ run_monte_carlo_filtering <- function(
     `Harvest prevalence P_prev` = prev_mean_val,
     `Contamination scale θ` = conc_scale_val,
     `Contamination shape κ` = conc_shape_val,
-    `RT - qPCR to infectious ratio Q` = q_inv_val,
+    `GC:Infectious virus ratio Q` = q_inv_val,
     `Host secretor susceptibility P(Se+)` = p_se_val,
     `DR α (Infection)` = a_val,
     `DR β (Infection)` = b_val,
     `DR η (Illness)` = n_val,
-    `DR ρ (Illness)` = r_val
+    `DR r (Illness)` = r_val
   )
   
   if (model_type == "geeraerd") {
@@ -244,9 +443,9 @@ run_monte_carlo_filtering <- function(
       .rng_kind = "Mersenne-Twister", .rng_normal_kind = "Inversion",
       .rng_sample_kind = "Rejection")
     input_data <- input_data %>% mutate(
-      `Geeraerd Thermal Sensitivity (z-value)` = therm_post$z[idx_u],
-      `Geeraerd Reference Inactivation Time (D_r)` = therm_post$D_R[idx_u],
-      `Geeraerd (log₁₀ Nₘᵢₙ)` = therm_post$logNmin[idx_u]
+      `Thermal sensitivity (z-value)` = therm_post$z[idx_u],
+      `Decimal reduction time (D_57°C)` = therm_post$D_R[idx_u],
+      `Residual tail (log₁₀ Nₘᵢₙ)` = therm_post$logNmin[idx_u]
     )
   } else {
     therm_post_raw <- readRDS(here::here("results", "module1_2_thermal_inactivation", "module1_2_meta_analysis_thermal_kinetics_posterior.rds"))
@@ -256,7 +455,7 @@ run_monte_carlo_filtering <- function(
       .rng_sample_kind = "Rejection")
     input_data <- input_data %>% mutate(
       `Mafart Thermal Sensitivity (z-value)` = therm_post$z_shellfish[idx_u],
-      `Mafart Reference Inactivation Time (D_r)` = therm_post$Dref_shell[idx_u],
+      `Decimal reduction time (δ_60°C)` = therm_post$Dref_shell[idx_u],
       `Mafart Shape Parameter (p)` = therm_post$p_weibull[idx_u]
     )
   }
@@ -268,14 +467,36 @@ run_monte_carlo_filtering <- function(
     if (length(val_unsafe) == 0 || length(val_safe) == 0) return(NULL)
     
     ks_res <- suppressWarnings(ks.test(val_unsafe, val_safe))
+    
+    mean_a <- mean(val_unsafe)
+    med_a <- median(val_unsafe)
+    mean_b <- mean(val_safe)
+    med_b <- median(val_safe)
+    
+    fmt <- function(v, name) {
+      if(is.na(v)) return("NA")
+      if(grepl("Secretor|prevalence", name)) return(sprintf("%.1f%%", v*100))
+      if(grepl("p-value|ratio Q|scale", name) && !grepl("shape", name)) {
+          if (v > 100) return(sprintf("%.0f", v))
+          if (v > 10) return(sprintf("%.1f", v))
+      }
+      return(sprintf("%.3g", v))
+    }
+    
+    str_above <- sprintf("%s [%s]", fmt(mean_a, param_name), fmt(med_a, param_name))
+    str_below <- sprintf("%s [%s]", fmt(mean_b, param_name), fmt(med_b, param_name))
+    
     tibble(
       Parameter = param_name,
       `KS_D_statistic` = as.numeric(ks_res$statistic),
       `p_value` = ks_res$p.value,
       n_above_threshold = length(val_unsafe),
-      n_below_threshold = length(val_safe)
+      n_below_threshold = length(val_safe),
+      Above_threshold_Mean_Median = str_above,
+      Below_threshold_Mean_Median = str_below
     )
   }) 
+ 
   
   if (nrow(ks_table) > 0) {
     ks_table <- ks_table %>%
@@ -284,7 +505,9 @@ run_monte_carlo_filtering <- function(
   } else {
     ks_table <- tibble(
       Parameter = character(), KS_D_statistic = numeric(), p_value = numeric(),
-      n_above_threshold = integer(), n_below_threshold = integer(), p_value_BH_FDR = numeric()
+      n_above_threshold = integer(), n_below_threshold = integer(), 
+      Above_threshold_Mean_Median = character(), Below_threshold_Mean_Median = character(),
+      p_value_BH_FDR = numeric()
     )
   }
   
@@ -298,6 +521,10 @@ run_monte_carlo_filtering <- function(
 
 #' Plot Monte Carlo Filtering Cumulative Distribution Function (CDF) Comparison Curves for Top 4 Parameters
 plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
+  requireNamespace("patchwork", quietly = TRUE)
+  requireNamespace("grid", quietly = TRUE)
+  requireNamespace("scales", quietly = TRUE)
+
   top_params <- mcf_result$ks_table$Parameter[1:4]
   
   # Use internal grouping keys
@@ -308,47 +535,80 @@ plot_mcf_cdf_curves <- function(mcf_result, output_filepath = NULL) {
     mutate(
       is_unsafe = mcf_result$is_unsafe,
       Group = if_else(is_unsafe, unsafe_key, safe_key)
-    ) %>%
-    dplyr::select(Group, all_of(top_params)) %>%
-    tidyr::pivot_longer(cols = -Group, names_to = "Parameter", values_to = "Value")
-  
-  # Ensure facets are ordered by importance (KS D-statistic)
-  df_plot$Parameter <- factor(df_plot$Parameter, levels = top_params)
+    )
   
   col_scale <- setNames(c("#D95F02", "#1B9E77"), c(unsafe_key, safe_key))
   
   # Format the cutoff dynamically
   cutoff_val <- mcf_result$cutoff
   cutoff_exp <- as.numeric(gsub("^.*e", "", format(cutoff_val, scientific = TRUE)))
-  if(cutoff_exp == 0 && cutoff_val == 0.0001) cutoff_exp <- -4 # fallback just in case
+  if(is.na(cutoff_exp) || (cutoff_exp == 0 && cutoff_val == 0.0001)) cutoff_exp <- -4 # fallback just in case
   
   # Build expression labels for the legend
-  safe_expr <- bquote("Below-threshold group (P < 10"^{.(cutoff_exp)}*")")
-  unsafe_expr <- bquote("Above-threshold group (P \u2265 10"^{.(cutoff_exp)}*")")
+  safe_expr <- bquote("Below-threshold group ("*italic(P) <= 10^{.(cutoff_exp)}*")")
+  unsafe_expr <- bquote("Above-threshold group ("*italic(P) > 10^{.(cutoff_exp)}*")")
   
-  p <- ggplot(df_plot, aes(x = Value, color = Group)) +
-    stat_ecdf(geom = "step", linewidth = 1.1) +
-    scale_color_manual(
-      values = col_scale,
-      labels = c(safe_key = safe_expr, unsafe_key = unsafe_expr)
-    ) +
-    facet_wrap(~ Parameter, scales = "free_x", ncol = 2) +
-    labs(
-      x = "Parameter Value",
-      y = "Empirical Cumulative Distribution F(x)",
-      color = NULL
-    ) +
-    theme_bw(base_size = 12) +
-    theme(
-      legend.position = "bottom",
-      strip.text = element_text(size = 11, face = "bold"),
-      strip.background = element_rect(fill = "white", color = "white"),
-      panel.grid.minor = element_blank()
-    )
+  make_single_panel <- function(param_name) {
+    param_vals <- df_plot[[param_name]]
+    non_zero <- param_vals[param_vals > 0 & !is.na(param_vals)]
+    is_log <- (length(non_zero) > 0) && (diff(range(log10(non_zero))) >= 3)
+    
+    d <- df_plot %>% dplyr::select(Group, Value = dplyr::all_of(param_name))
+    
+    p <- ggplot(d, aes(x = Value, color = Group)) +
+      stat_ecdf(geom = "step", linewidth = 1.1) +
+      scale_color_manual(
+        values = col_scale,
+        labels = setNames(list(safe_expr, unsafe_expr), c(safe_key, unsafe_key))
+      ) +
+      labs(
+        title = param_name,
+        y = NULL,
+        color = NULL
+      ) +
+      theme_bw(base_size = 12) +
+      theme(
+        plot.title = element_text(size = 11, face = "bold", hjust = 0.5, margin = margin(b = 6)),
+        panel.grid.minor = element_blank(),
+        plot.margin = margin(8, 12, 8, 8),
+        axis.text.x = element_text(size = 9)
+      )
+    
+    if (is_log) {
+      p <- p + 
+        scale_x_log10(
+          breaks = 10^seq(-4, 4, by = 1),
+          labels = scales::trans_format("log10", scales::math_format(10^.x))
+        ) +
+        labs(x = expression(paste("Parameter value (", log[10], " scale)")))
+    } else {
+      p <- p + 
+        scale_x_continuous(labels = scales::comma) +
+        labs(x = "Parameter value")
+    }
+    p
+  }
   
-  if (!is.null(output_filepath)) ggsave(filename = output_filepath, plot = p, width = 8.5, height = 6.5, dpi = 300, compression = "lzw")
+  p1 <- make_single_panel(top_params[1])
+  p2 <- make_single_panel(top_params[2])
+  p3 <- make_single_panel(top_params[3])
+  p4 <- make_single_panel(top_params[4])
   
-  p
+  y_grob <- patchwork::wrap_elements(grid::textGrob(
+    "Empirical Cumulative Distribution F(x)", 
+    rot = 90, 
+    gp = grid::gpar(fontsize = 12)
+  ))
+  
+  combined_plot <- (y_grob | ((p1 + p2) / (p3 + p4))) + 
+    patchwork::plot_layout(widths = c(1, 30), guides = "collect") & 
+    theme(legend.position = "bottom")
+  
+  if (!is.null(output_filepath)) {
+    ggsave(filename = output_filepath, plot = combined_plot, width = 8.5, height = 6.2, dpi = 300, compression = "lzw")
+  }
+  
+  combined_plot
 }
 
 # 7. 2D Monte Carlo Convergence Diagnostic Functions (Ballio & Guadagnini 2004, FDA Guidelines)
@@ -405,11 +665,22 @@ assess_simulation_convergence <- function(
 }
 
 #' Plot 2D Monte Carlo Numerical Convergence Curves
-plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
+plot_simulation_convergence <- function(conv_df, output_filepath = NULL, use_greek_nu = FALSE) {
+  lbl_unc <- if (use_greek_nu) "Uncertainty~(nu[unc])" else "Uncertainty~(italic(N)[unc])"
+  lbl_var <- if (use_greek_nu) "Variability~(nu[var])" else "Variability~(italic(N)[var])"
+  
+  conv_df <- conv_df %>%
+    dplyr::mutate(
+      Dimension_facet = factor(Dimension,
+        levels = c("Uncertainty", "Variability"),
+        labels = c(lbl_unc, lbl_var)
+      )
+    )
+
   p <- ggplot(conv_df, aes(x = SampleSize, y = Mean_P_illness, color = Dimension)) +
     geom_line(linewidth = 1.0) +
     geom_point(size = 2.5) +
-    facet_wrap(~ Dimension, scales = "free_x") +
+    facet_wrap(~ Dimension_facet, scales = "free_x", labeller = label_parsed) +
     scale_y_continuous(labels = function(x) {
       out <- character(length(x))
       for (i in seq_along(x)) {
@@ -426,8 +697,8 @@ plot_simulation_convergence <- function(conv_df, output_filepath = NULL) {
     }) +
     scale_color_manual(values = c("Variability" = "#2980B9", "Uncertainty" = "#C0392B")) +
     labs(
-      x = "Iteration",
-      y = "Mean HuNoV illness risk P(illness)",
+      x = "Sample Size Iterations",
+      y = expression("Mean Norovirus Illness Absolute Risk per Oyster, " * italic(P)(illness)),
       color = NULL
     ) +
     theme_bw(base_size = 11) +
@@ -450,8 +721,8 @@ run_mcf_scenario_matrix <- function(
   model_type <- match.arg(model_type)
   scen_names <- names(postcook_nodes_list)
   
-  col_unsafe <- sprintf("Above-threshold Iterations (P >= %g)", cutoff)
-  col_safe   <- sprintf("Below-threshold Iterations (P < %g)", cutoff)
+  col_unsafe <- sprintf("Above-threshold Iterations (P > %g)", cutoff)
+  col_safe   <- sprintf("Below-threshold Iterations (P <= %g)", cutoff)
 
   map_dfr(scen_names, function(scen_key) {
     post_node <- postcook_nodes_list[[scen_key]]

@@ -546,18 +546,44 @@ run_module2_cooking_method_size_scenarios <- function(
 
     prof <- all_profiles %>% dplyr::filter(method == m, size == sz)
 
+    # Baking experiments strictly conclude at ~10.5 min.
+    # Restrict baking evaluation grid strictly to times_min <= 10 (0, 2, 4, 6, 8, 10 min)
+    # to eliminate unmeasured rule = 2 flat-line extrapolation to 12-16 min.
+    # Steaming experiments cover 16+ min, so full times_min is evaluated.
+    eval_times <- if (m == "baking") {
+      times_min[times_min <= 10]
+    } else {
+      times_min[times_min <= max(prof$time)]
+    }
+
+    # Ensure profile starts at time 0 with initial reading to allow rule = 1 interpolation
+    prof_eval <- prof
+    if (min(prof_eval$time) > 0) {
+      prof_eval <- dplyr::bind_rows(
+        tibble::tibble(
+          method = m,
+          size = sz,
+          time = 0,
+          temperature = prof$temperature[1],
+          temp_min = prof$temp_min[1],
+          temp_max = prof$temp_max[1]
+        ),
+        prof_eval
+      )
+    }
+
     temp_interp <- tibble::tibble(
-      time = times_min,
-      temperature = approx(prof$time, prof$temperature, xout = times_min, rule = 2)$y
+      time = eval_times,
+      temperature = approx(prof_eval$time, prof_eval$temperature, xout = eval_times, rule = 1)$y
     )
 
     purrr::map_dfr(seq_len(n_unc), function(u) {
       draw <- theta_draws[u, ]
 
       if (tolower(model_type) == "mafart" || "Dref_shell" %in% names(draw) || "z_shellfish" %in% names(draw)) {
-        sim_res <- predict_mafart_dynamic_reduction(draw, temp_interp, times_min, known = list(temp_ref = 60))
+        sim_res <- predict_mafart_dynamic_reduction(draw, temp_interp, eval_times, known = list(temp_ref = 60))
       } else {
-        sim_res <- predict_geeraerd_dynamic_reduction(draw, temp_interp, times_min)
+        sim_res <- predict_geeraerd_dynamic_reduction(draw, temp_interp, eval_times)
       }
 
       sim_res %>%
@@ -641,3 +667,39 @@ summarize_postcook_dose_nodes <- function(postcook_nodes) {
   }) %>%
     dplyr::arrange(method, size, time_min)
 }
+
+#' Plot HuNoV GII survival ratio across cooking scenarios (Figure 5)
+plot_survival_ratio <- function(survival_df) {
+  df_plot <- survival_df %>%
+    dplyr::filter(!(method == "baking" & time_min > 10)) %>%
+    dplyr::mutate(
+      size_label = factor(stringr::str_to_title(size), levels = c("Small", "Medium", "Large")),
+      method_label = factor(stringr::str_to_title(method), levels = c("Baking", "Steaming")),
+      time_factor = factor(time_min, levels = as.character(seq(0, 16, by = 2)))
+    )
+
+  ggplot2::ggplot(df_plot, ggplot2::aes(x = time_factor, y = survival_fraction, fill = size_label)) +
+    ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.8), width = 0.6, outlier.size = 0.8, outlier.alpha = 0.4) +
+    ggplot2::facet_wrap(~method_label, scales = "free_x") +
+    ggplot2::scale_y_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      limits = c(0, 1.05),
+      breaks = seq(0, 1, by = 0.25)
+    ) +
+    ggplot2::scale_fill_brewer(palette = "Dark2") +
+    ggplot2::theme_bw(base_size = 14) +
+    ggplot2::theme(
+      legend.position = "bottom",
+      legend.title = ggplot2::element_text(face = "bold"),
+      axis.title = ggplot2::element_text(face = "bold"),
+      strip.background = ggplot2::element_rect(fill = "#EAEDED"),
+      strip.text = ggplot2::element_text(face = "bold", size = 12),
+      panel.grid.minor = ggplot2::element_blank()
+    ) +
+    ggplot2::labs(
+      x = "Cooking time (min)",
+      y = expression(bold(paste("HuNoV Survival Ratio (", bolditalic(N) / bolditalic(N)[0], ")"))),
+      fill = "Oyster size"
+    )
+}
+
